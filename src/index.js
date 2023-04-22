@@ -19,8 +19,8 @@ client.on("messageCreate", (message) => {
         return;
     }
 
-    if (message.content === "que") {
-        message.reply("so")
+    if (message.content === "!GatoGamer299") {
+        message.reply("https://media.discordapp.net/attachments/738203296636076072/1069402042365378670/GatoGamer.png")
     }
 });
 
