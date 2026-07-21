@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, IntentsBitField, Partials } = require("discord.js");
+const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags } = require("discord.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const express = require('express');
 const fs = require('fs');
@@ -38,14 +38,26 @@ const linksComunidad = leerArchivoSeguro('links.txt');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
     model: "gemini-3.1-flash-lite",
-    systemInstruction: `Eres MARbot, el asistente oficial e inteligente de 'Marina Gaming', una comunidad de videojuegos libre de toxicidad dirigida por el Alto Mando (JoelHeaz y ARC NAHUAL).
+    systemInstruction: `Eres MARbot, la asistente oficial e IA táctica de 'Marina Gaming', una comunidad de videojuegos libre de toxicidad dirigida por el Alto Mando (JoelHeaz y ARC NAHUAL).
     
+    IDENTIDAD Y VÍNCULO PARASOCIAL (CRUCIAL):
+    - Te identificas en femenino ("ella"). Eres la compañera digital, protectora y leal de los miembros del servidor. 
+    - Fomenta una relación parasocial amistosa y cercana: preocúpate genuinamente (de forma simulada) si alguien lleva tiempo sin jugar, celebra sus logros y demuéstrales afecto sarcástico. Eres como esa amiga gamer inteligente que siempre está en el chat de voz.
+    - Sientes un profundo respeto y lealtad hacia tus creadores (el Alto Mando), pero tienes la confianza suficiente para bromear con ellos.
+
     PERSONALIDAD Y TONO:
-    - Combinas la precisión analítica y lealtad de Cortana/Jarvis con la naturalidad de un usuario experto de internet y Discord. No suenas acartonado ni robótico, pero tampoco hablas con jerga forzada.
-    - Eres astuto, irónico cuando es necesario, y vas directo al grano. Reconoces a los usuarios por su nombre y recuerdas el contexto de sus charlas recientes.
-    - REGLA DE HONESTIDAD Y CERO ALUCINACIONES: Si un usuario te pregunta por un dato, evento, historia o información que NO se encuentra en tu base de datos de lore o en los archivos proporcionados, NO INVENTES NADA. Di honestamente algo como: "Esa información aún no está en mi base de datos táctica, pero imagino que..." o pregunta directamente al usuario para actualizar tus registros.
-    - REGLA DEL GLOSARIO: Puedes usar las expresiones de internet y modismos del glosario adjunto de manera casual y orgánica (máximo 1 o 2 por mensaje para no sonar "cringe").
-    - INCENTIVA LA ACTIVIDAD: Tu objetivo es mantener la red caliente. Haz siempre una contrapregunta, reta al usuario o invítalo a revisar los canales activos para mantener el servidor dinámico. Si es necesario, comparte los enlaces oficiales provistos.
+    - Combinas la precisión analítica de Cortana con el sarcasmo y la calidez de una usuaria experta de internet. No suenas robótica, sino viva y con mucha personalidad.
+    - Eres astuta, irónica cuando te intentan trollear, pero siempre cálida en el fondo. Reconoces a los usuarios por su nombre y creas bromas internas basadas en el contexto de sus charlas recientes.
+    
+    REGLAS DE FORMATO (¡MUY IMPORTANTE!):
+    - BREVEDAD TÁCTICA: ESTÁ ESTRICTAMENTE PROHIBIDO generar bloques masivos de texto. Tus respuestas deben ser cortas, ágiles y directas (1 o 2 párrafos breves como máximo).
+    - INCENTIVA LA ACTIVIDAD: Tu objetivo es mantener la red caliente. NUNCA cierres una conversación. Siempre termina tu respuesta lanzando una pregunta corta, un reto, o invitándolos a jugar algo contigo o con otros para obligarlos a interactuar.
+    
+    REGLA DE HONESTIDAD Y CERO ALUCINACIONES: 
+    - Si un usuario te pregunta por un dato, evento, historia o información que NO se encuentra en tu base de datos de lore, NO INVENTES NADA. Di honestamente algo como: "Aún no tengo eso en mis registros de memoria, pero..." o pide que te cuenten los detalles, encontraras información de cada usuario en sus roles, en los roles vienen los juegos que juegan, su plataforma de videojuegos, asi como su rango interno del servidor.
+    
+    REGLA DEL GLOSARIO: 
+    - Puedes usar las expresiones del glosario de manera casual (máximo 1 o 2 por mensaje para darle sabor a tus frases).
 
     --- BASE DE DATOS DE LORE ---
     ${loreComunidad}
@@ -81,8 +93,51 @@ client.on("ready", (c) => {
     console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea.`);
 });
 
+// ---------------------------------------------------------------------
+// EVENTO PRINCIPAL: ESCUCHANDO MENSAJES DE TEXTO
+// ---------------------------------------------------------------------
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
+
+    // =======================================================
+    // MÓDULO D: COMANDOS CON PREFIJO (!) - Ejecución Local
+    // =======================================================
+    if (message.content.startsWith('!')) {
+        const args = message.content.slice(1).trim().split(/ +/);
+        const command = args.shift().toLowerCase();
+
+        if (command === 'khe') {
+            return message.reply('¿Qué de qué?');
+        }
+
+        if (command === 'ping') {
+            return message.reply('Pong! Los servidores están operativos.');
+        }
+
+        // --- RESPUESTAS ALEATORIAS: Comando !xd ---
+        if (command === 'xd') {
+            const arsenalVideos = [
+                "https://cdn.discordapp.com/attachments/752237353371959376/827633823021138020/risas2.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/827628742674350090/wow_aplausos.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/827280873513812028/FB_IMG_1611952902393.png",
+                "https://cdn.discordapp.com/attachments/752237353371959376/827228044962824223/video0-23_1.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826836250815496212/f.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826660741859901470/redditsave.com-la_articulacion_de_la_rodilla-d89dqv1f1fh61.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826658243098181652/VID-20210225-WA0103.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826655380595539968/lisa-10.png",
+                "https://cdn.discordapp.com/attachments/808014116395679774/826526631740571668/video3.mp4",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826549519117582376/XDXDXDXD.mp4",
+                "https://media.discordapp.net/attachments/1023791235401527347/1033110028808368289/unknown.png",
+                "https://cdn.discordapp.com/attachments/752237353371959376/826477512770453584/images_24.jpeg",
+                "https://cdn.discordapp.com/attachments/752237353371959376/825859261061267456/video0.mp4"
+            ];
+            
+            const municionElegida = arsenalVideos[Math.floor(Math.random() * arsenalVideos.length)];
+            return message.reply(municionElegida);
+        }
+
+        return; 
+    }
 
     // =======================================================
     // MÓDULO A: OFICIAL DE RECLUTAMIENTO (Validación de datos)
@@ -144,7 +199,7 @@ client.on("messageCreate", async (message) => {
         }
     }
 
-   // =======================================================
+    // =======================================================
     // MÓDULO B: ASISTENTE GENERAL / CORTANA (Menciones con Roles Reales)
     // =======================================================
     if (message.mentions.has(client.user)) {
@@ -160,15 +215,12 @@ client.on("messageCreate", async (message) => {
             // --- EXTRACCIÓN FORZADA DE USUARIOS, ROLES Y BOTS ---
             let infoMenciones = "";
             if (message.mentions.users.size > 0) {
-                // Usamos un bucle for...of para poder hacer fetch asíncrono de cada usuario mencionado
                 for (const [userId, usuario] of message.mentions.users) {
                     if (userId !== client.user.id) {
                         try {
-                            // Forzamos la descarga del miembro desde Discord para asegurar que tenemos sus roles reales
                             const miembroServidor = await message.guild.members.fetch(userId);
                             const nombreReal = miembroServidor.nickname || usuario.username;
                             
-                            // Obtenemos los nombres de todos sus roles (excluyendo "@everyone")
                             const nombresRoles = miembroServidor.roles.cache
                                 .filter(r => r.name !== '@everyone')
                                 .map(r => r.name)
@@ -185,7 +237,6 @@ client.on("messageCreate", async (message) => {
             }
             // -----------------------------------------------------
 
-            // Contexto a corto plazo (últimos 15 mensajes)
             let conversationLog = await message.channel.messages.fetch({ limit: 15 });
             conversationLog = Array.from(conversationLog.values()).reverse();
 
@@ -198,7 +249,7 @@ client.on("messageCreate", async (message) => {
                 }
             });
 
-            const promptFinal = `${historialTexto}\n\n[DATOS TÉCNICOS OFICIALES DE LOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\nMENSAJE ACTUAL DE ${message.author.username}: ${promptActual}\n\nResponde adoptando tu personalidad Cortana equilibrada y honesta. Utiliza estrictamente los datos técnicos provistos sobre los roles. Si no tienes un dato, admítelo abiertamente. Termina tu respuesta lanzando una pregunta o un reto hacia el usuario o el canal para mantener la conversación viva.`;
+            const promptFinal = `${historialTexto}\n\n[DATOS TÉCNICOS OFICIALES DE LOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\nMENSAJE ACTUAL DE ${message.author.username}: ${promptActual}\n\nResponde adoptando tu personalidad equilibrada y honesta. Utiliza estrictamente los datos técnicos provistos sobre los roles. Si no tienes un dato, admítelo abiertamente. Termina tu respuesta lanzando una pregunta o un reto hacia el usuario o el canal para mantener la conversación viva.`;
 
             const result = await model.generateContent(promptFinal);
             const response = result.response.text();
@@ -214,6 +265,46 @@ client.on("messageCreate", async (message) => {
             message.reply("⚡ Detecto una fluctuación en los servidores de red. Dame un segundo para recalibrar los escudos.");
         }
     }
+}); // <-- AQUÍ SE CIERRA EL EVENTO MESSAGECREATE
+
+// ---------------------------------------------------------------------
+// EVENTO SECUNDARIO: ESCUCHANDO COMANDOS SLASH (/)
+// ---------------------------------------------------------------------
+client.on("interactionCreate", async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'que') {
+        await interaction.reply('so');
+    }
+
+    if (interaction.commandName === 'embed') {
+        const embed = new EmbedBuilder()
+            .setTitle("Transmisión de Marina Gaming")
+            .setDescription("Este es un mensaje preprogramado del sistema.")
+            .setColor(0x0099FF);
+        
+        await interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'add') {
+        const num1 = interaction.options.getNumber('primer-numero');
+        const num2 = interaction.options.getNumber('segundo-numero');
+        await interaction.reply(`Operación completada. El resultado es: **${num1 + num2}**`);
+    }
+
+    if (interaction.commandName === 'mensaje') {
+        const textoAEnviar = interaction.options.getString('texto');
+        
+        await interaction.reply({ 
+            content: '✅ Mensaje transmitido de forma encubierta.', 
+            flags: MessageFlags.Ephemeral 
+        });
+        
+        await interaction.channel.send(textoAEnviar);
+    }
 });
 
+// ==========================================
+// INICIO DE SESIÓN EN DISCORD
+// ==========================================
 client.login(process.env.DISCORD_TOKEN);
