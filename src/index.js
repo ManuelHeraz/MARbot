@@ -334,17 +334,32 @@ client.on("interactionCreate", async (interaction) => {
 
     // --- NUEVO COMANDO: /medallas ---
     if (interaction.commandName === 'medallas') {
-        // Obtenemos lo que eligió el usuario en el menú. Si no eligió nada, usamos su propio nombre.
         const marinoSeleccionado = interaction.options.getString('marino');
         const nombreBuscado = marinoSeleccionado ? marinoSeleccionado.toLowerCase() : interaction.user.username.toLowerCase();
         
-        const rutaBanner = path.join(__dirname, 'banners', `${nombreBuscado}.png`);
+        const carpetaBanners = path.join(__dirname, 'banners');
+        let bannerEncontrado = null;
+        let disponibles = [];
 
-        // Verificamos si el archivo de este usuario existe
-        if (fs.existsSync(rutaBanner)) {
-            const bannerImagen = new AttachmentBuilder(rutaBanner);
+        // 1. Buscamos primero en el radar leyendo toda la carpeta
+        if (fs.existsSync(carpetaBanners)) {
+            const archivos = fs.readdirSync(carpetaBanners);
             
-            // Personalizamos el texto dependiendo de si buscó a alguien más o a sí mismo
+            // Filtramos la lista para el mensaje de error (quitando .png sin importar mayúsculas)
+            disponibles = archivos
+                .filter(archivo => archivo.toLowerCase().endsWith('.png'))
+                .map(archivo => archivo.replace(/\.png$/i, ''));
+
+            // 2. Comparamos todo en minúsculas para encontrar el archivo real sin importar cómo se guardó
+            bannerEncontrado = archivos.find(archivo => archivo.toLowerCase() === `${nombreBuscado}.png`);
+        }
+
+        // Si la búsqueda arrojó un resultado real
+        if (bannerEncontrado) {
+            // Usamos el nombre exacto que tiene el archivo en Linux
+            const rutaExacta = path.join(carpetaBanners, bannerEncontrado);
+            const bannerImagen = new AttachmentBuilder(rutaExacta);
+            
             const textoRespuesta = marinoSeleccionado 
                 ? `Extrayendo el historial táctico del marino **${nombreBuscado}**:` 
                 : `Aquí tienes tu historial táctico y condecoraciones, **${nombreBuscado}**:`;
@@ -354,17 +369,7 @@ client.on("interactionCreate", async (interaction) => {
                 files: [bannerImagen] 
             });
         } else {
-            // Si el archivo no existe
-            const carpetaBanners = path.join(__dirname, 'banners');
-            let disponibles = [];
-            
-            if (fs.existsSync(carpetaBanners)) {
-                const archivos = fs.readdirSync(carpetaBanners);
-                disponibles = archivos
-                    .filter(archivo => archivo.endsWith('.png'))
-                    .map(archivo => archivo.replace('.png', ''));
-            }
-
+            // Si el archivo definitivamente no existe
             let mensajeRespuesta = marinoSeleccionado
                 ? `Mis registros indican que el marino **${nombreBuscado}** aún no tiene medallas asignadas.`
                 : `Parece que tu historial táctico aún está en blanco, no tienes medallas asignadas en mis registros.`;
