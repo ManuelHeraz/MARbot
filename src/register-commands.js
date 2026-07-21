@@ -6,6 +6,19 @@ const commands = [
         name: "que",
         description: "responde con so a cada que",
     },
+{
+        name: "medallas",
+        description: "Muestra el banner de medallas de un marino (o el tuyo).",
+        options: [
+            {
+                name: "marino",
+                description: "Selecciona a un marino de la lista (déjalo en blanco para ver el tuyo).",
+                type: ApplicationCommandOptionType.String,
+                required: false, // Es falso para que puedan mandarlo vacío y ver el propio
+                autocomplete: true // ¡Esta es la magia del menú desplegable!
+            }
+        ]
+    },
     {
         name: "embed",
         description: "envia un embed!",

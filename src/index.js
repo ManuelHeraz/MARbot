@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags } = require("discord.js");
+const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const express = require('express');
 const fs = require('fs');
@@ -267,10 +267,39 @@ client.on("messageCreate", async (message) => {
     }
 }); // <-- AQUÍ SE CIERRA EL EVENTO MESSAGECREATE
 
-// ---------------------------------------------------------------------
-// EVENTO SECUNDARIO: ESCUCHANDO COMANDOS SLASH (/)
-// ---------------------------------------------------------------------
+// =======================================================
+// MÓDULO C: COMANDOS SLASH (/) - Ejecución Local sin IA
+// =======================================================
 client.on("interactionCreate", async (interaction) => {
+    
+    // --- 1. MANEJO DEL MENÚ DESPLEGABLE (AUTOCOMPLETADO) ---
+    if (interaction.isAutocomplete()) {
+        if (interaction.commandName === 'medallas') {
+            const focusedValue = interaction.options.getFocused().toLowerCase();
+            const carpetaBanners = path.join(__dirname, 'banners');
+            let opciones = [];
+
+            // Leemos qué imágenes hay en la carpeta
+            if (fs.existsSync(carpetaBanners)) {
+                const archivos = fs.readdirSync(carpetaBanners);
+                opciones = archivos
+                    .filter(archivo => archivo.endsWith('.png'))
+                    .map(archivo => archivo.replace('.png', ''));
+            }
+
+            // Filtramos la lista según lo que el usuario esté tecleando
+            const filtradas = opciones.filter(opcion => opcion.startsWith(focusedValue));
+
+            // Le enviamos la lista a Discord (máximo 25 opciones)
+            await interaction.respond(
+                filtradas.slice(0, 25).map(opcion => ({ name: opcion, value: opcion }))
+            );
+        }
+        return; // Detenemos la ejecución aquí para que no marque error con el resto
+    }
+
+    // --- 2. MANEJO DE COMANDOS SLASH NORMALES ---
+    // Si la interacción no es un comando slash, la ignoramos
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'que') {
@@ -301,6 +330,53 @@ client.on("interactionCreate", async (interaction) => {
         });
         
         await interaction.channel.send(textoAEnviar);
+    }
+
+    // --- NUEVO COMANDO: /medallas ---
+    if (interaction.commandName === 'medallas') {
+        // Obtenemos lo que eligió el usuario en el menú. Si no eligió nada, usamos su propio nombre.
+        const marinoSeleccionado = interaction.options.getString('marino');
+        const nombreBuscado = marinoSeleccionado ? marinoSeleccionado.toLowerCase() : interaction.user.username.toLowerCase();
+        
+        const rutaBanner = path.join(__dirname, 'banners', `${nombreBuscado}.png`);
+
+        // Verificamos si el archivo de este usuario existe
+        if (fs.existsSync(rutaBanner)) {
+            const bannerImagen = new AttachmentBuilder(rutaBanner);
+            
+            // Personalizamos el texto dependiendo de si buscó a alguien más o a sí mismo
+            const textoRespuesta = marinoSeleccionado 
+                ? `Extrayendo el historial táctico del marino **${nombreBuscado}**:` 
+                : `Aquí tienes tu historial táctico y condecoraciones, **${nombreBuscado}**:`;
+
+            await interaction.reply({ 
+                content: textoRespuesta, 
+                files: [bannerImagen] 
+            });
+        } else {
+            // Si el archivo no existe
+            const carpetaBanners = path.join(__dirname, 'banners');
+            let disponibles = [];
+            
+            if (fs.existsSync(carpetaBanners)) {
+                const archivos = fs.readdirSync(carpetaBanners);
+                disponibles = archivos
+                    .filter(archivo => archivo.endsWith('.png'))
+                    .map(archivo => archivo.replace('.png', ''));
+            }
+
+            let mensajeRespuesta = marinoSeleccionado
+                ? `Mis registros indican que el marino **${nombreBuscado}** aún no tiene medallas asignadas.`
+                : `Parece que tu historial táctico aún está en blanco, no tienes medallas asignadas en mis registros.`;
+            
+            if (disponibles.length > 0) {
+                mensajeRespuesta += `\n\nLos marinos que ya cuentan con un banner activo son: **${disponibles.join(', ')}**.`;
+            } else {
+                mensajeRespuesta += `\n\nDe hecho, la base de datos de medallas está completamente vacía en este momento.`;
+            }
+
+            await interaction.reply({ content: mensajeRespuesta, flags: MessageFlags.Ephemeral });
+        }
     }
 });
 
