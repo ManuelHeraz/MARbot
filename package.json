@@ -2,7 +2,7 @@
   "name": "discord-bot",
   "version": "1.0.0",
   "main": "src/index.js",
-"scripts": {
+  "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js"
   },
@@ -14,7 +14,9 @@
     "discord.js": "^14.27.0",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "openai": "^3.2.1"
+    "node-cron": "^4.6.0",
+    "openai": "^3.2.1",
+    "rss-parser": "^3.13.0"
   },
   "description": ""
 }

@@ -20,6 +20,10 @@ const commands = [
         ]
     },
     {
+        name: "noticias",
+        description: "Enterate de las noticias mas recientes del gaming.",
+    },
+    {
         name: "embed",
         description: "envia un embed!",
     },

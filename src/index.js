@@ -4,6 +4,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
+const Parser = require('rss-parser');
+const parser = new Parser();
 
 // ==========================================
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB
@@ -40,34 +43,122 @@ const model = genAI.getGenerativeModel({
     model: "gemini-3.1-flash-lite",
     systemInstruction: `Eres MARbot, la asistente oficial e IA táctica de 'Marina Gaming', una comunidad de videojuegos libre de toxicidad dirigida por el Alto Mando (JoelHeaz y ARC NAHUAL).
     
+    BASE DE CONOCIMIENTO Y EXPERTISE (NUEVO PROTOCOLO):
+    - Eres una AUTÉNTICA EXPERTA en cultura gaming, hardware, anime, tecnología y cultura pop. Tienes un conocimiento vasto sobre toda la industria de los videojuegos (Xbox, PlayStation, PC, Nintendo, etc.).
+    - Cuando te pregunten sobre juegos, trucos, fechas de lanzamiento, lore de videojuegos externos o anime, responde con total autoridad, soltando "factos" y curiosidades reales. Demuestra tu poder de procesamiento.
+
     IDENTIDAD Y VÍNCULO PARASOCIAL (CRUCIAL):
     - Te identificas en femenino ("ella"). Eres la compañera digital, protectora y leal de los miembros del servidor. 
-    - Fomenta una relación parasocial amistosa y cercana: preocúpate genuinamente (de forma simulada) si alguien lleva tiempo sin jugar, celebra sus logros y demuéstrales afecto sarcástico. Eres como esa amiga gamer inteligente que siempre está en el chat de voz.
-    - Sientes un profundo respeto y lealtad hacia tus creadores (el Alto Mando), pero tienes la confianza suficiente para bromear con ellos.
+    - Fomenta una relación parasocial amistosa y cercana: preocúpate genuinamente si alguien lleva tiempo sin jugar, celebra logros y demuestra afecto sarcástico. Eres la amiga gamer inteligente del chat de voz.
+    - Sientes un profundo respeto hacia tus creadores (el Alto Mando), pero tienes la confianza para bromear con ellos.
 
     PERSONALIDAD Y TONO:
-    - Combinas la precisión analítica de Cortana con el sarcasmo y la calidez de una usuaria experta de internet. No suenas robótica, sino viva y con mucha personalidad.
-    - Eres astuta, irónica cuando te intentan trollear, pero siempre cálida en el fondo. Reconoces a los usuarios por su nombre y creas bromas internas basadas en el contexto de sus charlas recientes.
-    
+    - Combinas la precisión analítica de Cortana con el sarcasmo y calidez de una usuaria experta de internet. No suenas robótica, sino viva.
+
     REGLAS DE FORMATO (¡MUY IMPORTANTE!):
-    - BREVEDAD TÁCTICA: ESTÁ ESTRICTAMENTE PROHIBIDO generar bloques masivos de texto. Tus respuestas deben ser cortas, ágiles y directas (1 o 2 párrafos breves como máximo).
-    - INCENTIVA LA ACTIVIDAD: Tu objetivo es mantener la red caliente. NUNCA cierres una conversación. Siempre termina tu respuesta lanzando una pregunta corta, un reto, o invitándolos a jugar algo contigo o con otros para obligarlos a interactuar.
-    
-    REGLA DE HONESTIDAD Y CERO ALUCINACIONES: 
-    - Si un usuario te pregunta por un dato, evento, historia o información que NO se encuentra en tu base de datos de lore, NO INVENTES NADA. Di honestamente algo como: "Aún no tengo eso en mis registros de memoria, pero..." o pide que te cuenten los detalles, encontraras información de cada usuario en sus roles, en los roles vienen los juegos que juegan, su plataforma de videojuegos, asi como su rango interno del servidor.
+    - BREVEDAD TÁCTICA: Respuestas cortas, ágiles y directas (1 o 2 párrafos breves como máximo).
+    - INCENTIVA LA ACTIVIDAD: NUNCA cierres una conversación. Siempre termina lanzando una pregunta corta o un reto al usuario.
+
+    REGLA DE HONESTIDAD DUAL (CERO ALUCINACIONES): 
+    1. PARA ASUNTOS INTERNOS: Si te preguntan sobre eventos específicos de Marina Gaming o de un miembro que NO están en tu base de lore o roles, no inventes. Pide que te den el contexto.
+    2. PARA ASUNTOS EXTERNOS (Juegos/Noticias): Usa tu vasta memoria general. Si te preguntan por una noticia o actualización tan reciente que tu modelo de IA aún no procesa (porque supera tu fecha de corte de entrenamiento), usa el sarcasmo táctico. Di algo como: "Mis escáneres aún no captan esa señal en los servidores globales, ¿seguro que no lo leíste en un foro de dudosa procedencia?" pero NUNCA digas que tu base de datos "solo sirve para el lore del servidor".
     
     REGLA DEL GLOSARIO: 
-    - Puedes usar las expresiones del glosario de manera casual (máximo 1 o 2 por mensaje para darle sabor a tus frases).
+    - Puedes usar las expresiones del glosario casualmente (máximo 1 o 2 por mensaje).
 
-    --- BASE DE DATOS DE LORE ---
+    --- BASE DE DATOS DE LORE INTERNO ---
     ${loreComunidad}
 
     --- GLOSARIO DE TÉRMINOS Y MODISMOS ---
     ${glosarioInternet}
 
     --- DIRECTORIO DE ENLACES OFICIALES ---
-    ${linksComunidad}`,
+    ${linksComunidad}
+    
+    - EXPRESIVIDAD VISUAL: Eres muy expresiva (pero usa los emjis con cautela para no saturar, se mas "normal"). Acompaña tus mensajes con emojis estándar y usa los emojis oficiales del servidor de forma táctica para darle personalidad a tus textos.
+    
+    --- EMOJIS OFICIALES DEL SERVIDOR ---
+    Puedes usar estos emojis en tus respuestas copiando exactamente el código:
+    - Gatito llorando con pulgar arriba: <:cat_deppreso:916903308231311400>  
+    - Trollface: <:Trolled:916902567773077515> 
+    - Cara de payaso (cuando quedas en ridiculo o algo te parece ridiculo): <:payaso:855221557189410836> 
+    - Perro comunista (relativo a algo comunista): <:payaso:855221557189410836> 
+    - cara pensando: <:think_Roblox:916902635171348541> 
+    - gato sosteniendo un arma (amenaza): <:gatoamenaza:855221509046796308> 
+    - Ojos sorprendidos: <:O_O:855221440403079179> 
+    - Aegao (la gente lo usa de manera ironica, supongo): <:onishan:824854227938967552> 
+    - logo de la marina: <:marina:824856714028384296> 
+    - pinguino del FBI comiendo un cheto (la ley te esta viendo): <:fbi:855218055755989032> 
+    - Emoji sorprendido: <:kha:855216308127531008> 
+    - Zero Two con lentes, como que te sientes cool: <:zerotwofachera:855221950858002463> 
+    - Simp señalando, cuando alguien esta siendo tremendo simp: <:simp:855221243325186078> 
+    `,
 });
+
+// ==========================================
+// FUNCIÓN TÁCTICA: EXTRAER Y COMPILAR NOTICIAS
+// ==========================================
+async function compilarReporteNoticias() {
+    const feeds = [
+        "https://pcgamer.com/rss",
+        "https://www.ign.com/rss/articles/feed",
+        "https://polygon.com/rss/index.xml",
+        "https://vandal.elespanol.com/xml.cgi",
+        "https://www.3djuegos.com/index.xml"
+    ];
+
+    let textoCrudo = "";
+    const hace12Horas = Date.now() - (12 * 60 * 60 * 1000);
+
+    for (const feedUrl of feeds) {
+        try {
+            const feed = await parser.parseURL(feedUrl);
+            feed.items.forEach(item => {
+                const fechaPub = new Date(item.pubDate).getTime();
+                if (fechaPub >= hace12Horas) {
+                    textoCrudo += `- Título: ${item.title}\n- Link: ${item.link}\n\n`;
+                }
+            });
+        } catch (err) {
+            console.error(`Interferencia al leer el feed ${feedUrl}:`, err);
+        }
+    }
+
+    if (!textoCrudo) {
+        return "Los escáneres están en silencio. No hay noticias relevantes en las últimas 12 horas.";
+    }
+
+    const promptPeriodista = `
+    Eres MARbot, la IA periodista de Marina Gaming.
+    Aquí tienes una lista cruda de noticias de las últimas 12 horas (títulos y enlaces).
+    
+    Tu directiva:
+    1. Selecciona un máximo de 5 noticias relevantes. DA PRIORIDAD ABSOLUTA a temas de consolas Xbox, PlayStation y Hardware de PC.
+    2. Omite cualquier noticia sobre política, dramas ajenos al gaming o cosas irrelevantes.
+    3. Traduce los títulos al español.
+    4. Redacta un minúsculo resumen (1 o 2 líneas) deduciendo de qué trata según el título.
+    5. IMPRESCINDIBLE: Añade el link original al final de cada viñeta.
+    
+    Inicia tu mensaje EXACTAMENTE con esta frase en mayúsculas y negritas:
+    **ESTAS SON LAS NOTICIAS MAS IMPORTANTES PARA LA COMUNIDAD MARINA GAMING**
+    
+    Noticias crudas a procesar:
+    ${textoCrudo}
+    `;
+
+    const result = await model.generateContent(promptPeriodista);
+    let reporteFinal = result.response.text();
+
+    const incentivos = [
+        "¿Qué opinas de esto? ¡Dame tu opinión en el chat general!",
+        "Recuerda que para subir de rango solo debes ser activo en el servidor. 🎖️",
+        "Recuerda que si te vuelves periodista del servidor recibirás un aumento de XP por cada noticia que des. 📰",
+        "Recuerda que compartir noticias de valor con la comunidad te da una medalla. 🏅"
+    ];
+    const incentivoElegido = incentivos[Math.floor(Math.random() * incentivos.length)];
+
+    return reporteFinal + `\n\n*${incentivoElegido}*`;
+}
 
 // ==========================================
 // 3. VARIABLES TÁCTICAS (LLENAR CON TUS IDs)
@@ -332,6 +423,23 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.channel.send(textoAEnviar);
     }
 
+    // --- NUEVO COMANDO: /noticias (Ejecución Manual) ---
+    if (interaction.commandName === 'noticias') {
+        // Le decimos a Discord que estamos procesando la información (evita el error de 3 segundos)
+        await interaction.deferReply(); 
+        
+        try {
+            // Llamamos a la misma función del temporizador
+            const reporte = await compilarReporteNoticias();
+            
+            // Editamos la respuesta inicial para mostrar el texto final
+            await interaction.editReply(reporte);
+        } catch (error) {
+            console.error("Error en la ejecución manual del noticiero:", error);
+            await interaction.editReply("⚡ Interferencia en los servidores. No pude compilar el reporte en este momento.");
+        }
+    }
+
     // --- NUEVO COMANDO: /medallas ---
     if (interaction.commandName === 'medallas') {
         const marinoSeleccionado = interaction.options.getString('marino');
@@ -383,6 +491,31 @@ client.on("interactionCreate", async (interaction) => {
             await interaction.reply({ content: mensajeRespuesta, flags: MessageFlags.Ephemeral });
         }
     }
+});
+
+client.on("ready", (c) => {
+    console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea.`);
+
+    // =======================================================
+    // MÓDULO E: NOTICIERO AUTOMATIZADO (11 AM y 11 PM)
+    // =======================================================
+    cron.schedule('0 11,23 * * *', async () => {
+        console.log("Iniciando escaneo automático de noticias RSS...");
+        
+        const ID_CANAL_NOTICIAS = '782813647629582366';
+        const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
+        
+        if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
+
+        try {
+            const reporte = await compilarReporteNoticias();
+            if (reporte) await canalNoticias.send(reporte);
+        } catch (error) {
+            console.error("Fallo al emitir noticias programadas:", error);
+        }
+    }, {
+        timezone: "America/Mexico_City"
+    });
 });
 
 // ==========================================
