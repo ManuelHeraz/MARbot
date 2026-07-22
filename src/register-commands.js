@@ -19,9 +19,13 @@ const commands = [
             }
         ]
     },
-    {
+{
         name: "noticias",
-        description: "Enterate de las noticias mas recientes del gaming.",
+        description: "Fuerza a MARbot a escanear la red y traer el reporte rápido.",
+    },
+    {
+        name: "noticia-extendida",
+        description: "Genera una nota extendida para redes sociales y la guarda en la página web.",
     },
     {
         name: "embed",

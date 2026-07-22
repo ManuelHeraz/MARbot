@@ -7,12 +7,44 @@ const path = require('path');
 const cron = require('node-cron');
 const Parser = require('rss-parser');
 const parser = new Parser();
+const mongoose = require('mongoose'); // NUEVO
+const cors = require('cors'); // NUEVO
 
 // ==========================================
-// 1. CONFIGURACIÓN DEL SERVIDOR WEB
+// BASE DE DATOS MONGODB
+// ==========================================
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('📦 Bóveda de MongoDB conectada con éxito.'))
+    .catch(err => console.error('Error al conectar a MongoDB:', err));
+
+// Estructura de la información que enviaremos a la base de datos
+const noticiaSchema = new mongoose.Schema({
+    texto: String,
+    // El índice TTL: Destruye el documento 14 días (14d) después de la fecha de creación
+    fecha: { type: Date, default: Date.now, expires: '14d' } 
+});
+const NoticiaDB = mongoose.model('Noticia', noticiaSchema);
+
+// ==========================================
+// 1. CONFIGURACIÓN DEL SERVIDOR WEB Y API
 // ==========================================
 const app = express();
+app.use(cors()); // Esto permite que GitHub Pages lea los datos sin ser bloqueado
+
 app.get('/', (req, res) => res.send('El sistema de comunicaciones de Marina Gaming está en línea.'));
+
+// --- NUEVA RUTA API PARA TU PÁGINA WEB ---
+app.get('/api/noticias', async (req, res) => {
+    try {
+        // Busca las 10 noticias más recientes, ordenadas de la más nueva a la más vieja
+        const noticias = await NoticiaDB.find().sort({ fecha: -1 }).limit(10);
+        res.json(noticias);
+    } catch (error) {
+        console.error("Error en la API:", error);
+        res.status(500).json({ error: 'Interferencia al leer la base de datos' });
+    }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`📡 Señal web transmitiendo en puerto ${port}`));
 
@@ -96,73 +128,97 @@ const model = genAI.getGenerativeModel({
 });
 
 // ==========================================
-// FUNCIÓN TÁCTICA: EXTRAER Y COMPILAR NOTICIAS
+// FUNCIÓN 1: REPORTE RÁPIDO (Discord)
 // ==========================================
 async function compilarReporteNoticias() {
-    // 1. Actualizamos el arsenal de fuentes (Fuera Vandal, entra LevelUp)
-    const feeds = [
-        "https://pcgamer.com/rss",
-        "https://www.ign.com/rss/articles/feed",
-        "https://polygon.com/rss/index.xml",
-        "https://www.3djuegos.com/index.xml",
-    ];
-
+    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
     let textoCrudo = "";
     const hace12Horas = Date.now() - (12 * 60 * 60 * 1000);
 
     for (const feedUrl of feeds) {
         try {
             const feed = await parser.parseURL(feedUrl);
-            // Extraemos el nombre oficial del medio (ej. "LevelUp", "IGN")
             const nombreFuente = feed.title || "Medio de Gaming"; 
-            
             feed.items.forEach(item => {
-                const fechaPub = new Date(item.pubDate).getTime();
-                if (fechaPub >= hace12Horas) {
-                    // Ya no enviamos el link a Gemini, solo la fuente y el título
+                if (new Date(item.pubDate).getTime() >= hace12Horas) {
                     textoCrudo += `- Fuente: ${nombreFuente}\n- Título original: ${item.title}\n\n`;
                 }
             });
-        } catch (err) {
-            console.error(`Interferencia al leer el feed ${feedUrl}:`, err);
-        }
+        } catch (err) { console.error(`Fallo en feed ${feedUrl}:`, err); }
     }
 
-    if (!textoCrudo) {
-        return "Los escáneres están en silencio. No hay noticias relevantes en las últimas 12 horas.";
-    }
+    if (!textoCrudo) return "Los escáneres están en silencio. No hay noticias relevantes en las últimas 12 horas.";
 
-    // 2. Nuevas directivas para MARbot (Sin links, mejores resúmenes)
- const promptPeriodista = `
-    Eres MARbot, la IA periodista de Marina Gaming.
-    Aquí tienes una lista cruda de noticias de las últimas 12 horas (fuentes y títulos originales).
+    const promptDiscord = `
+    Eres MARbot. Aquí hay noticias crudas.
+    1. Selecciona máximo 4 noticias de Xbox, PlayStation o Hardware PC.
+    2. Omite política.
+    3. Redacta un resumen ULTRA CORTO (1 o 2 líneas) por noticia.
+    4. Al final de cada viñeta pon: *(Fuente: [Nombre de la Fuente])*.
     
-    Tu directiva:
-    1. Selecciona un máximo de 4 noticias relevantes. DA PRIORIDAD ABSOLUTA a temas de Xbox, PlayStation y Hardware de PC.
-    2. FILTRO ESTRICTO: Omite cualquier noticia sobre política, dramas ajenos al gaming o cosas irrelevantes.
-    3. Traduce los títulos al español para presentarlos.
-    4. Redacta un resumen rico y atractivo (2 o 3 líneas) deduciendo de qué trata la noticia según su título. Tienes espacio para ser creativa.
-    5. Al final de cada viñeta de noticia, añade exactamente esto para dar los créditos: *(Fuente: [Nombre de la Fuente])*. NADA MÁS. Omite el título original y los enlaces.
+    Inicia con: **ESTAS SON LAS NOTICIAS MAS IMPORTANTES PARA LA COMUNIDAD MARINA GAMING**
     
-    Inicia tu mensaje EXACTAMENTE con esta frase en mayúsculas y negritas:
-    **ESTAS SON LAS NOTICIAS MAS IMPORTANTES PARA LA COMUNIDAD MARINA GAMING**
-    
-    Noticias crudas a procesar:
-    ${textoCrudo}
+    Noticias: ${textoCrudo}
     `;
 
-    const result = await model.generateContent(promptPeriodista);
-    let reporteFinal = result.response.text();
-
+    const result = await model.generateContent(promptDiscord);
     const incentivos = [
         "¿Qué opinas de esto? ¡Dame tu opinión en el chat general!",
-        "Recuerda que para subir de rango solo debes ser activo en el servidor. 🎖️",
-        "Recuerda que si te vuelves periodista del servidor recibirás un aumento de XP por cada noticia que des. 📰",
-        "Recuerda que compartir noticias de valor con la comunidad te da una medalla. 🏅"
+        "Recuerda que para subir de rango solo debes ser activo en el servidor. 🎖️"
     ];
-    const incentivoElegido = incentivos[Math.floor(Math.random() * incentivos.length)];
+    return result.response.text() + `\n\n*${incentivos[Math.floor(Math.random() * incentivos.length)]}*`;
+}
 
-    return reporteFinal + `\n\n*${incentivoElegido}*`;
+// ==========================================
+// FUNCIÓN 2: NOTA EXTENDIDA WEB (Redes + MongoDB)
+// ==========================================
+async function compilarNoticiaExtendida() {
+    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
+    let textoCrudo = "";
+    const hace24Horas = Date.now() - (24 * 60 * 60 * 1000); // Busca en las últimas 24 hrs para tener más de donde elegir
+
+    for (const feedUrl of feeds) {
+        try {
+            const feed = await parser.parseURL(feedUrl);
+            const nombreFuente = feed.title || "Medio"; 
+            feed.items.forEach(item => {
+                if (new Date(item.pubDate).getTime() >= hace24Horas) {
+                    textoCrudo += `- Fuente: ${nombreFuente}\n- Título: ${item.title}\n\n`;
+                }
+            });
+        } catch (err) {}
+    }
+
+    if (!textoCrudo) return "No hay datos suficientes para redactar un artículo hoy.";
+
+    const promptWeb = `
+    Eres la redactora jefa de Marina Gaming.
+    Aquí tienes titulares de hoy. Elige UNA noticia principal muy relevante (Xbox, PS o PC) y redacta un post extenso, analítico y atrapante (estilo reseña o artículo de opinión gamer).
+    
+    Estructura obligatoria:
+    1. Un título creativo en mayúsculas y negritas con emojis.
+    2. El cuerpo de la noticia (2 o 3 párrafos de buen tamaño).
+    3. Una línea de hashtags populares (#Gaming, etc).
+    4. Una línea citando la fuente usada.
+    
+    CRÍTICO: No excedas los 1800 caracteres en total. No inventes datos que no estén implícitos en el título.
+    
+    Noticias disponibles: ${textoCrudo}
+    `;
+
+    const result = await model.generateContent(promptWeb);
+    const reporteParaWeb = result.response.text();
+
+    // Guardado en MongoDB
+    try {
+        const nuevaNoticia = new NoticiaDB({ texto: reporteParaWeb });
+        await nuevaNoticia.save();
+        console.log("💾 Nota Web guardada en MongoDB con éxito.");
+    } catch (err) {
+        console.error("Error al guardar en BD:", err);
+    }
+
+    return reporteParaWeb;
 }
 
 // ==========================================
@@ -443,6 +499,23 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
+    // --- NUEVO COMANDO: /noticia-extendida ---
+    if (interaction.commandName === 'noticia-extendida') {
+        await interaction.deferReply(); 
+        
+        try {
+            let reporte = await compilarNoticiaExtendida();
+            if (reporte && reporte.length > 2000) {
+                reporte = reporte.substring(0, 1995) + "...";
+            }
+            // MARbot te da el texto listo para copiar y pegar en Facebook, ¡y ya se guardó en la BD!
+            await interaction.editReply(reporte);
+        } catch (error) {
+            console.error("Error al generar nota extendida:", error);
+            await interaction.editReply("⚡ Interferencia. No pude redactar el artículo web ahora mismo.");
+        }
+    }
+
     // --- NUEVO COMANDO: /medallas ---
     if (interaction.commandName === 'medallas') {
         const marinoSeleccionado = interaction.options.getString('marino');
@@ -503,28 +576,27 @@ client.on("ready", (c) => {
     // MÓDULO E: NOTICIERO AUTOMATIZADO (11 AM y 11 PM)
     // =======================================================
     cron.schedule('0 11,23 * * *', async () => {
-        console.log("Iniciando escaneo automático de noticias RSS...");
-        
-        const ID_CANAL_NOTICIAS = '782813647629582366';
-        const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
-        
-        if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
+        // ... (código del módulo E)
+    }, {
+        timezone: "America/Mexico_City"
+    });
 
+    // =======================================================
+    // MÓDULO F: PUBLICACIÓN WEB AUTÓNOMA (12:00 PM Diario)
+    // =======================================================
+    cron.schedule('0 12 * * *', async () => {
+        console.log("Iniciando redacción autónoma para la página web...");
+        
         try {
-            let reporte = await compilarReporteNoticias();
-            
-            // Seguro contra el límite de 2000 caracteres
-            if (reporte && reporte.length > 2000) {
-                reporte = reporte.substring(0, 1995) + "...";
-            }
-            
-            if (reporte) await canalNoticias.send(reporte);
+            await compilarNoticiaExtendida();
+            console.log("Actualización web completada. Base de datos sincronizada.");
         } catch (error) {
-            console.error("Fallo al emitir noticias programadas:", error);
+            console.error("Fallo en la publicación web automática:", error);
         }
     }, {
         timezone: "America/Mexico_City"
     });
+
 });
 
 // ==========================================
