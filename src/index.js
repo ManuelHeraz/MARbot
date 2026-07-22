@@ -99,12 +99,12 @@ const model = genAI.getGenerativeModel({
 // FUNCIÓN TÁCTICA: EXTRAER Y COMPILAR NOTICIAS
 // ==========================================
 async function compilarReporteNoticias() {
+    // 1. Actualizamos el arsenal de fuentes (Fuera Vandal, entra LevelUp)
     const feeds = [
         "https://pcgamer.com/rss",
         "https://www.ign.com/rss/articles/feed",
         "https://polygon.com/rss/index.xml",
-        "https://vandal.elespanol.com/xml.cgi",
-        "https://www.3djuegos.com/index.xml"
+        "https://www.3djuegos.com/index.xml",
     ];
 
     let textoCrudo = "";
@@ -113,10 +113,14 @@ async function compilarReporteNoticias() {
     for (const feedUrl of feeds) {
         try {
             const feed = await parser.parseURL(feedUrl);
+            // Extraemos el nombre oficial del medio (ej. "LevelUp", "IGN")
+            const nombreFuente = feed.title || "Medio de Gaming"; 
+            
             feed.items.forEach(item => {
                 const fechaPub = new Date(item.pubDate).getTime();
                 if (fechaPub >= hace12Horas) {
-                    textoCrudo += `- Título: ${item.title}\n- Link: ${item.link}\n\n`;
+                    // Ya no enviamos el link a Gemini, solo la fuente y el título
+                    textoCrudo += `- Fuente: ${nombreFuente}\n- Título original: ${item.title}\n\n`;
                 }
             });
         } catch (err) {
@@ -128,16 +132,17 @@ async function compilarReporteNoticias() {
         return "Los escáneres están en silencio. No hay noticias relevantes en las últimas 12 horas.";
     }
 
+    // 2. Nuevas directivas para MARbot (Sin links, mejores resúmenes)
     const promptPeriodista = `
     Eres MARbot, la IA periodista de Marina Gaming.
-    Aquí tienes una lista cruda de noticias de las últimas 12 horas (títulos y enlaces).
+    Aquí tienes una lista cruda de noticias de las últimas 12 horas (fuentes y títulos originales).
     
     Tu directiva:
-    1. Selecciona un máximo de 5 noticias relevantes. DA PRIORIDAD ABSOLUTA a temas de consolas Xbox, PlayStation y Hardware de PC.
-    2. Omite cualquier noticia sobre política, dramas ajenos al gaming o cosas irrelevantes.
-    3. Traduce los títulos al español.
-    4. Redacta un minúsculo resumen (1 o 2 líneas) deduciendo de qué trata según el título.
-    5. IMPRESCINDIBLE: Añade el link original al final de cada viñeta.
+    1. Selecciona un máximo de 5 noticias relevantes. DA PRIORIDAD ABSOLUTA a temas de Xbox, PlayStation y Hardware de PC.
+    2. FILTRO ESTRICTO: Omite cualquier noticia sobre política, dramas ajenos al gaming o cosas irrelevantes.
+    3. Traduce los títulos al español para presentarlos.
+    4. Redacta un resumen rico y atractivo (2 o 3 líneas) deduciendo de qué trata la noticia según su título. Tienes espacio para ser creativa.
+    5. Al final de cada viñeta de noticia, añade exactamente esto para dar los créditos: *(Fuente: [Nombre de la Fuente] - "[Título original en su idioma]")*. NO incluyas enlaces HTTP.
     
     Inicia tu mensaje EXACTAMENTE con esta frase en mayúsculas y negritas:
     **ESTAS SON LAS NOTICIAS MAS IMPORTANTES PARA LA COMUNIDAD MARINA GAMING**
@@ -178,10 +183,6 @@ const client = new Client({
         IntentsBitField.Flags.MessageContent,
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction]
-});
-
-client.on("ready", (c) => {
-    console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea.`);
 });
 
 // ---------------------------------------------------------------------
@@ -425,14 +426,16 @@ client.on("interactionCreate", async (interaction) => {
 
     // --- NUEVO COMANDO: /noticias (Ejecución Manual) ---
     if (interaction.commandName === 'noticias') {
-        // Le decimos a Discord que estamos procesando la información (evita el error de 3 segundos)
         await interaction.deferReply(); 
         
         try {
-            // Llamamos a la misma función del temporizador
-            const reporte = await compilarReporteNoticias();
+            let reporte = await compilarReporteNoticias();
             
-            // Editamos la respuesta inicial para mostrar el texto final
+            // Seguro contra el límite de 2000 caracteres
+            if (reporte && reporte.length > 2000) {
+                reporte = reporte.substring(0, 1995) + "...";
+            }
+            
             await interaction.editReply(reporte);
         } catch (error) {
             console.error("Error en la ejecución manual del noticiero:", error);
@@ -508,7 +511,13 @@ client.on("ready", (c) => {
         if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
 
         try {
-            const reporte = await compilarReporteNoticias();
+            let reporte = await compilarReporteNoticias();
+            
+            // Seguro contra el límite de 2000 caracteres
+            if (reporte && reporte.length > 2000) {
+                reporte = reporte.substring(0, 1995) + "...";
+            }
+            
             if (reporte) await canalNoticias.send(reporte);
         } catch (error) {
             console.error("Fallo al emitir noticias programadas:", error);
