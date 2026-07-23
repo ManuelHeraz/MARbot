@@ -175,7 +175,7 @@ async function compilarReporteNoticias() {
 async function compilarNoticiaExtendida() {
     const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
     let textoCrudo = "";
-    const hace24Horas = Date.now() - (24 * 60 * 60 * 1000); // Busca en las últimas 24 hrs para tener más de donde elegir
+    const hace24Horas = Date.now() - (24 * 60 * 60 * 1000); 
 
     for (const feedUrl of feeds) {
         try {
@@ -191,9 +191,26 @@ async function compilarNoticiaExtendida() {
 
     if (!textoCrudo) return "No hay datos suficientes para redactar un artículo hoy.";
 
+    // --- NUEVO PROTOCOLO: EXTRAER MEMORIA A CORTO PLAZO ---
+    let historialReciente = "";
+    try {
+        const ultimasNoticias = await NoticiaDB.find().sort({ fecha: -1 }).limit(3);
+        if (ultimasNoticias.length > 0) {
+            // Extraemos solo los primeros 100 caracteres (donde está el título) para no gastar tokens
+            historialReciente = ultimasNoticias.map(nota => nota.texto.substring(0, 100)).join(" | ");
+        }
+    } catch (err) {
+        console.error("Error al leer el historial anti-duplicados:", err);
+    }
+
     const promptWeb = `
     Eres la redactora jefa de Marina Gaming.
-    Aquí tienes titulares de hoy. Elige UNA noticia principal muy relevante (Xbox, PS o PC) y redacta un post extenso, analítico y atrapante (estilo reseña o artículo de opinión gamer).
+    Aquí tienes titulares de hoy. Elige UNA noticia principal muy relevante (Xbox, PS o PC) y redacta un post extenso, analítico y atrapante.
+    
+    REGLA ANTI-DUPLICADOS (CRÍTICO):
+    Estas son las últimas noticias que ya publicaste recientemente:
+    [${historialReciente || "Aún no hay publicaciones recientes."}]
+    ESTÁ ESTRICTAMENTE PROHIBIDO elegir una noticia que hable del mismo tema que las listadas arriba. Elige un tema diferente.
     
     Estructura obligatoria:
     1. Un título creativo en mayúsculas y negritas con emojis.
@@ -201,7 +218,7 @@ async function compilarNoticiaExtendida() {
     3. Una línea de hashtags populares (#Gaming, etc).
     4. Una línea citando la fuente usada.
     
-    CRÍTICO: No excedas los 1800 caracteres en total. No inventes datos que no estén implícitos en el título.
+    CRÍTICO: No excedas los 1800 caracteres en total. No inventes datos.
     
     Noticias disponibles: ${textoCrudo}
     `;
