@@ -593,7 +593,25 @@ client.on("ready", (c) => {
     // MÓDULO E: NOTICIERO AUTOMATIZADO (11 AM y 11 PM)
     // =======================================================
     cron.schedule('0 11,23 * * *', async () => {
-        // ... (código del módulo E)
+        console.log("Iniciando escaneo automático de noticias RSS (Resumen Corto)...");
+        
+        const ID_CANAL_NOTICIAS = '782813647629582366'; // Tu canal de noticias
+        const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
+        
+        if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
+
+        try {
+            let reporte = await compilarReporteNoticias();
+            
+            // Seguro contra el límite de 2000 caracteres
+            if (reporte && reporte.length > 2000) {
+                reporte = reporte.substring(0, 1995) + "...";
+            }
+            
+            if (reporte) await canalNoticias.send(reporte);
+        } catch (error) {
+            console.error("Fallo al emitir noticias programadas:", error);
+        }
     }, {
         timezone: "America/Mexico_City"
     });
@@ -605,8 +623,19 @@ client.on("ready", (c) => {
         console.log("Iniciando redacción autónoma para la página web...");
         
         try {
+            // Genera la nota y la guarda en MongoDB
             await compilarNoticiaExtendida();
             console.log("Actualización web completada. Base de datos sincronizada.");
+            
+            // --- NUEVO: Aviso en Discord de la actualización Web ---
+            const ID_CANAL_NOTICIAS = '782813647629582366';
+            const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
+            
+            if (canalNoticias) {
+                await canalNoticias.send("🌐 **¡Atención marinos!** He detectado actividad importante y acabo de publicar un nuevo artículo extendido en nuestra base de datos. ¡Vayan a leerlo a la sección de *Noticias Gaming* en la página web oficial!: https://manuelheraz.github.io/MarinaGaming/pages/notigaming/index.html");
+            }
+            // --------------------------------------------------------
+            
         } catch (error) {
             console.error("Fallo en la publicación web automática:", error);
         }
