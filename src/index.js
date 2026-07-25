@@ -9,6 +9,7 @@ const Parser = require('rss-parser');
 const parser = new Parser();
 const mongoose = require('mongoose'); // NUEVO
 const cors = require('cors'); // NUEVO
+const https = require('https'); // NUEVO
 
 // ==========================================
 // BASE DE DATOS MONGODB
@@ -243,9 +244,35 @@ async function compilarNoticiaExtendida() {
 // ==========================================
 async function obtenerJuegoGratisEpic() {
     try {
-        // Hacemos ping directo a la API de la tienda de Epic
-        const response = await fetch('https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=es-MX&country=MX&allowCountries=MX');
-        const data = await response.json();
+        // Envolvemos la solicitud HTTPS en una Promesa para poder usar await
+        const data = await new Promise((resolve, reject) => {
+            const opciones = {
+                hostname: 'store-site-backend-static.ak.epicgames.com',
+                path: '/freeGamesPromotions?locale=es-MX&country=MX&allowCountries=MX',
+                method: 'GET',
+                headers: {
+                    // Aquí está el camuflaje: Le decimos a Epic que somos un navegador Chrome de Windows
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+            };
+
+            const req = https.request(opciones, (res) => {
+                let cuerpoDato = '';
+                // Recopilamos los datos mientras llegan
+                res.on('data', (chunk) => cuerpoDato += chunk);
+                // Cuando termina de llegar la información, la convertimos a JSON
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(cuerpoDato));
+                    } catch (e) {
+                        reject(new Error("Fallo al decodificar JSON de Epic"));
+                    }
+                });
+            });
+
+            req.on('error', (e) => reject(e));
+            req.end();
+        });
         
         // Entramos a la ruta exacta donde guardan la lista de juegos
         const juegos = data.data.Catalog.searchStore.elements;
@@ -263,7 +290,7 @@ async function obtenerJuegoGratisEpic() {
                     // Formateamos la fecha límite para que sea legible
                     const fechaFin = new Date(oferta.endDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     
-                    // Buscamos la URL correcta del juego (Epic a veces la esconde en distintas variables)
+                    // Buscamos la URL correcta del juego
                     const slug = juego.catalogNs?.mappings?.[0]?.pageSlug || juego.productSlug || juego.urlSlug;
                     const urlJuego = slug ? `https://store.epicgames.com/es-MX/p/${slug}` : `https://store.epicgames.com/es-MX/free-games`;
 
