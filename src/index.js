@@ -153,7 +153,7 @@ async function compilarReporteNoticias() {
     const promptDiscord = `
     Eres MARbot. Aquí hay noticias crudas.
     1. Selecciona máximo 4 noticias de Xbox, PlayStation o Hardware PC.
-    2. Omite política.
+    2. Omite política y descuentos a menos de que sean cosas GRATIS.
     3. Redacta un resumen ULTRA CORTO (1 o 2 líneas) por noticia.
     4. Al final de cada viñeta pon: *(Fuente: [Nombre de la Fuente])*.
     
@@ -280,11 +280,15 @@ async function obtenerJuegoGratisEpic() {
         let hayJuegos = false;
         let juegosAgregados = 0; // NUEVO: Contador táctico
 
-        juegos.forEach(juego => {
+juegos.forEach(juego => {
             // Filtramos SOLO los juegos con promoción activa
             if (juego.promotions && juego.promotions.promotionalOffers && juego.promotions.promotionalOffers.length > 0) {
                 
-                // Límite táctico: Máximo 4 juegos para no romper el límite de Discord
+                // NUEVO FILTRO TÁCTICO: Asegurarnos de que cueste exactamente 0
+                const precioActual = juego.price?.totalPrice?.discountPrice;
+                if (precioActual !== 0) return; // Si cuesta más de 0, lo saltamos y pasamos al siguiente
+
+                // Límite táctico: Máximo 4 juegos
                 if (juegosAgregados >= 4) return; 
 
                 const ofertas = juego.promotions.promotionalOffers[0].promotionalOffers;
@@ -296,7 +300,6 @@ async function obtenerJuegoGratisEpic() {
                     const slug = juego.catalogNs?.mappings?.[0]?.pageSlug || juego.productSlug || juego.urlSlug;
                     const urlJuego = slug ? `https://store.epicgames.com/es-MX/p/${slug}` : `https://store.epicgames.com/es-MX/free-games`;
 
-                    // Recortamos descripciones masivas (máximo 120 caracteres)
                     let descCorta = juego.description || "Sin descripción.";
                     if (descCorta.length > 120) {
                         descCorta = descCorta.substring(0, 117) + "...";
@@ -734,12 +737,42 @@ client.on("ready", (c) => {
             const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
             
             if (canalNoticias) {
-                await canalNoticias.send("🌐 **¡Atención marinos!** He detectado actividad importante y acabo de publicar un nuevo artículo extendido en nuestra base de datos. ¡Vayan a leerlo a la sección de *Noticias Gaming* en la página web oficial!: https://manuelheraz.github.io/MarinaGaming/pages/notigaming/index.html");
+                await canalNoticias.send("🌐 **¡Atención Comunidad de Marina Gaming!** Acabo de publicar un nuevo artículo para Marina Gaming Noticias!. ¡Vayan a leerlo a la sección de *Noticias Gaming* en la página web oficial!: https://manuelheraz.github.io/MarinaGaming/pages/notigaming/index.html");
             }
             // --------------------------------------------------------
             
         } catch (error) {
             console.error("Fallo en la publicación web automática:", error);
+        }
+    }, {
+        timezone: "America/Mexico_City"
+    });
+
+    // =======================================================
+    // MÓDULO G: ALERTA EPIC GAMES (JUEVES A LAS 10:05 AM)
+    // =======================================================
+    cron.schedule('5 10 * * 4', async () => {
+        console.log("Iniciando escaneo automático de Epic Games...");
+        
+        const ID_CANAL_EPIC = '892245997365887066'; // Canal asignado por el Alto Mando
+        const canalEpic = client.channels.cache.get(ID_CANAL_EPIC);
+        
+        if (!canalEpic) return console.error("Error Táctico: No se encontró el canal de Epic Games.");
+
+        try {
+            let reporteEpic = await obtenerJuegoGratisEpic();
+            
+            // Seguro contra el límite de 2000 caracteres
+            if (reporteEpic && reporteEpic.length > 2000) {
+                reporteEpic = reporteEpic.substring(0, 1995) + "...";
+            }
+            
+            // Enviamos el mensaje solo si realmente encontró juegos
+            if (reporteEpic && !reporteEpic.includes("Los radares no detectan")) {
+                await canalEpic.send(reporteEpic + "\n@everyone"); // Etiquetamos para máxima visibilidad
+            }
+        } catch (error) {
+            console.error("Fallo al emitir el reporte automático de Epic:", error);
         }
     }, {
         timezone: "America/Mexico_City"
