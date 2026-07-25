@@ -24,6 +24,30 @@ const commands = [
         description: "Fuerza a MARbot a escanear las noticias sobre gaming.",
     },
     {
+    name: 'actualizaciones',
+    description: 'Obtén el resumen del último parche o actualización de tus juegos favoritos.',
+    options: [
+        {
+            name: 'juego',
+            description: 'Selecciona el juego que deseas escanear',
+            type: 3, // STRING
+            required: true,
+            choices: [
+                { name: 'Minecraft', value: 'minecraft' },
+                { name: 'GTA V / Online', value: 'gta5' },
+                { name: 'Apex Legends', value: 'apex' },
+                { name: 'Fortnite', value: 'fortnite' },
+                { name: 'Forza Horizon', value: 'forza' },
+                { name: 'Halo Infinite', value: 'halo' },
+                { name: 'Overwatch 2', value: 'overwatch' },
+                { name: 'Rainbow Six Siege', value: 'r6' },
+                { name: 'Rocket League', value: 'rocket' },
+                { name: 'Call of Duty: Warzone', value: 'warzone' }
+            ]
+        }
+    ]
+},
+    {
     name: 'status',
     description: 'Verifica si los servidores de las consolas o tiendas están caídos.',
     options: [

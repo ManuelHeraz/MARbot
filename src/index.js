@@ -5,11 +5,9 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
-const Parser = require('rss-parser');
-const parser = new Parser();
 const mongoose = require('mongoose'); // NUEVO
 const cors = require('cors'); // NUEVO
-const https = require('https'); // NUEVO
+const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 
 // ==========================================
 // BASE DE DATOS MONGODB
@@ -129,276 +127,11 @@ const model = genAI.getGenerativeModel({
 });
 
 // ==========================================
-// FUNCIÓN 1: REPORTE RÁPIDO (Discord)
-// ==========================================
-async function compilarReporteNoticias() {
-    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
-    let textoCrudo = "";
-    const hace12Horas = Date.now() - (12 * 60 * 60 * 1000);
-
-    for (const feedUrl of feeds) {
-        try {
-            const feed = await parser.parseURL(feedUrl);
-            const nombreFuente = feed.title || "Medio de Gaming"; 
-            feed.items.forEach(item => {
-                if (new Date(item.pubDate).getTime() >= hace12Horas) {
-                    textoCrudo += `- Fuente: ${nombreFuente}\n- Título original: ${item.title}\n\n`;
-                }
-            });
-        } catch (err) { console.error(`Fallo en feed ${feedUrl}:`, err); }
-    }
-
-    if (!textoCrudo) return "Los escáneres están en silencio. No hay noticias relevantes en las últimas 12 horas.";
-
-    const promptDiscord = `
-    Eres MARbot. Aquí hay noticias crudas.
-    1. Selecciona máximo 4 noticias de Xbox, PlayStation o Hardware PC.
-    2. Omite política y descuentos a menos de que sean cosas GRATIS.
-    3. Redacta un resumen ULTRA CORTO (1 o 2 líneas) por noticia.
-    4. Al final de cada viñeta pon: *(Fuente: [Nombre de la Fuente])*.
-    
-    Inicia con: **ESTAS SON LAS NOTICIAS MAS IMPORTANTES PARA LA COMUNIDAD MARINA GAMING**
-    
-    Noticias: ${textoCrudo}
-    `;
-
-    const result = await model.generateContent(promptDiscord);
-    const incentivos = [
-        "¿Qué opinas de esto? ¡Dame tu opinión en el chat general!",
-        "Recuerda que para subir de rango solo debes ser activo en el servidor. 🎖️"
-    ];
-    return result.response.text() + `\n\n*${incentivos[Math.floor(Math.random() * incentivos.length)]}*`;
-}
-
-// ==========================================
-// FUNCIÓN 2: NOTA EXTENDIDA WEB (Redes + MongoDB)
-// ==========================================
-async function compilarNoticiaExtendida() {
-    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
-    let textoCrudo = "";
-    const hace24Horas = Date.now() - (24 * 60 * 60 * 1000); 
-
-    for (const feedUrl of feeds) {
-        try {
-            const feed = await parser.parseURL(feedUrl);
-            const nombreFuente = feed.title || "Medio"; 
-            feed.items.forEach(item => {
-                if (new Date(item.pubDate).getTime() >= hace24Horas) {
-                    textoCrudo += `- Fuente: ${nombreFuente}\n- Título: ${item.title}\n\n`;
-                }
-            });
-        } catch (err) {}
-    }
-
-    if (!textoCrudo) return "No hay datos suficientes para redactar un artículo hoy.";
-
-    // --- NUEVO PROTOCOLO: EXTRAER MEMORIA A CORTO PLAZO ---
-    let historialReciente = "";
-    try {
-        const ultimasNoticias = await NoticiaDB.find().sort({ fecha: -1 }).limit(3);
-        if (ultimasNoticias.length > 0) {
-            // Extraemos solo los primeros 100 caracteres (donde está el título) para no gastar tokens
-            historialReciente = ultimasNoticias.map(nota => nota.texto.substring(0, 100)).join(" | ");
-        }
-    } catch (err) {
-        console.error("Error al leer el historial anti-duplicados:", err);
-    }
-
-    const promptWeb = `
-    Eres la redactora jefa de Marina Gaming.
-    Aquí tienes titulares de hoy. Elige UNA noticia principal muy relevante (Xbox, PS o PC) y redacta un post extenso, analítico y atrapante.
-    
-    REGLA ANTI-DUPLICADOS (CRÍTICO):
-    Estas son las últimas noticias que ya publicaste recientemente:
-    [${historialReciente || "Aún no hay publicaciones recientes."}]
-    ESTÁ ESTRICTAMENTE PROHIBIDO elegir una noticia que hable del mismo tema que las listadas arriba. Elige un tema diferente.
-    
-    Estructura obligatoria:
-    1. Un título creativo en mayúsculas y negritas con emojis.
-    2. El cuerpo de la noticia (2 o 3 párrafos de buen tamaño).
-    3. Una línea de hashtags populares (#Gaming, etc).
-    4. Una línea citando la fuente usada.
-    
-    CRÍTICO: No excedas los 1800 caracteres en total. No inventes datos.
-    
-    Noticias disponibles: ${textoCrudo}
-    `;
-
-    const result = await model.generateContent(promptWeb);
-    const reporteParaWeb = result.response.text();
-
-    // Guardado en MongoDB
-    try {
-        const nuevaNoticia = new NoticiaDB({ texto: reporteParaWeb });
-        await nuevaNoticia.save();
-        console.log("💾 Nota Web guardada en MongoDB con éxito.");
-    } catch (err) {
-        console.error("Error al guardar en BD:", err);
-    }
-
-    return reporteParaWeb;
-}
-
-// ==========================================
-// FUNCIÓN 3: RADAR DE EPIC GAMES (JUEGOS GRATIS)
-// ==========================================
-async function obtenerJuegoGratisEpic() {
-    try {
-        // Envolvemos la solicitud HTTPS en una Promesa para poder usar await
-        const data = await new Promise((resolve, reject) => {
-            const opciones = {
-                hostname: 'store-site-backend-static.ak.epicgames.com',
-                path: '/freeGamesPromotions?locale=es-MX&country=MX&allowCountries=MX',
-                method: 'GET',
-                headers: {
-                    // Aquí está el camuflaje: Le decimos a Epic que somos un navegador Chrome de Windows
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-            };
-
-            const req = https.request(opciones, (res) => {
-                let cuerpoDato = '';
-                // Recopilamos los datos mientras llegan
-                res.on('data', (chunk) => cuerpoDato += chunk);
-                // Cuando termina de llegar la información, la convertimos a JSON
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(cuerpoDato));
-                    } catch (e) {
-                        reject(new Error("Fallo al decodificar JSON de Epic"));
-                    }
-                });
-            });
-
-            req.on('error', (e) => reject(e));
-            req.end();
-        });
-        
-        // Entramos a la ruta exacta donde guardan la lista de juegos
-        const juegos = data.data.Catalog.searchStore.elements;
-        let mensaje = "🎁 **¡ALERTA DE JUEGOS GRATUITOS EN EPIC GAMES!** 🎁\n\n";
-        let hayJuegos = false;
-        let juegosAgregados = 0; // NUEVO: Contador táctico
-
-juegos.forEach(juego => {
-            // Filtramos SOLO los juegos con promoción activa
-            if (juego.promotions && juego.promotions.promotionalOffers && juego.promotions.promotionalOffers.length > 0) {
-                
-                // NUEVO FILTRO TÁCTICO: Asegurarnos de que cueste exactamente 0
-                const precioActual = juego.price?.totalPrice?.discountPrice;
-                if (precioActual !== 0) return; // Si cuesta más de 0, lo saltamos y pasamos al siguiente
-
-                // Límite táctico: Máximo 4 juegos
-                if (juegosAgregados >= 4) return; 
-
-                const ofertas = juego.promotions.promotionalOffers[0].promotionalOffers;
-                
-                if (ofertas.length > 0) {
-                    const oferta = ofertas[0];
-                    const fechaFin = new Date(oferta.endDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    
-                    const slug = juego.catalogNs?.mappings?.[0]?.pageSlug || juego.productSlug || juego.urlSlug;
-                    const urlJuego = slug ? `https://store.epicgames.com/es-MX/p/${slug}` : `https://store.epicgames.com/es-MX/free-games`;
-
-                    let descCorta = juego.description || "Sin descripción.";
-                    if (descCorta.length > 120) {
-                        descCorta = descCorta.substring(0, 117) + "...";
-                    }
-
-                    mensaje += `🎮 **${juego.title}**\n`;
-                    mensaje += `📝 *${descCorta}*\n`;
-                    mensaje += `⏳ **Disponible hasta:** ${fechaFin}\n`;
-                    mensaje += `🔗 **Reclamar:** ${urlJuego}\n\n`;
-                    
-                    hayJuegos = true;
-                    juegosAgregados++;
-                }
-            }
-        });
-
-        if (!hayJuegos) return "Los radares no detectan juegos gratis en Epic Games en este momento. Volveré a escanear pronto.";
-        return mensaje;
-    } catch (error) {
-        console.error("Error al obtener juegos de Epic:", error);
-        return "⚡ Interferencia en los servidores de Epic Games. No pude decodificar su base de datos.";
-    }
-}
-
-// ==========================================
-// FUNCIÓN 4: RADAR DE ESTADO DE SERVIDORES (FASE B)
-// ==========================================
-async function obtenerStatusPlataforma(plataforma) {
-    try {
-        if (plataforma === 'epic') {
-            // Infiltración en la API pública de Epic Games
-            const data = await new Promise((resolve, reject) => {
-                const opciones = {
-                    hostname: 'status.epicgames.com',
-                    path: '/api/v2/status.json',
-                    method: 'GET'
-                };
-
-                const req = https.request(opciones, (res) => {
-                    let cuerpoDato = '';
-                    res.on('data', (chunk) => cuerpoDato += chunk);
-                    res.on('end', () => {
-                        try { resolve(JSON.parse(cuerpoDato)); } 
-                        catch (e) { reject(e); }
-                    });
-                });
-                req.on('error', (e) => reject(e));
-                req.end();
-            });
-
-            const estadoGlobal = data.status.description;
-            const indicador = estadoGlobal.includes("All Systems Operational") ? "🟢 **ÓPTIMO**" : "🔴 **FALLAS DETECTADAS**";
-            
-            return `📡 **Telemetría de Epic Games:**\nEstado actual: ${indicador}\nReporte oficial: *${estadoGlobal}*\nVer radar: https://status.epicgames.com/`;
-        }
-
-        // Respuestas tácticas para plataformas blindadas
-        const radares = {
-            'xbox': {
-                nombre: 'Xbox Live',
-                link: 'https://support.xbox.com/es-MX/xbox-live-status',
-                emoji: '🟢'
-            },
-            'psn': {
-                nombre: 'PlayStation Network',
-                link: 'https://status.playstation.com/es-mx/',
-                emoji: '🔵'
-            },
-            'steam': {
-                nombre: 'Steam',
-                link: 'https://steamstat.us/',
-                emoji: '💨'
-            },
-            'nintendo': {
-                nombre: 'Nintendo Switch Online',
-                link: 'https://www.nintendo.co.jp/netinfo/es/index.html',
-                emoji: '🔴'
-            }
-        };
-
-        const info = radares[plataforma];
-        if (info) {
-            return `${info.emoji} **Rastreo de ${info.nombre}:**\nLos servidores de esta plataforma están blindados contra escaneos de IA. \n🔗 **Revisa el radar oficial en tiempo real aquí:** ${info.link}`;
-        }
-
-        return "Plataforma no reconocida en mis bases de datos.";
-
-    } catch (error) {
-        console.error("Error al obtener status:", error);
-        return "⚡ Interferencia electromagnética. No pude acceder a los datos de los servidores en este momento.";
-    }
-}
-
-// ==========================================
 // 3. VARIABLES TÁCTICAS (LLENAR CON TUS IDs)
 // ==========================================
-const ID_CANAL_PRESENTACIONES = 'ID_DEL_CANAL_DONDE_SE_PRESENTAN'; 
-const ID_ROL_RECLUTA = 'ID_DEL_ROL_RECLUTA';
-const ID_ROL_MARINO = 'ID_DEL_ROL_MARINO';
+const ID_CANAL_PRESENTACIONES = '738194570852040774'; 
+const ID_ROL_RECLUTA = '738195054752956427';
+const ID_ROL_MARINO = '732796865720090765';
 
 // ==========================================
 // 4. CONFIGURACIÓN DE DISCORD
@@ -657,7 +390,7 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.deferReply(); 
         
         try {
-            let reporte = await compilarReporteNoticias();
+            let reporte = compilarReporteNoticias(model);
             
             // Seguro contra el límite de 2000 caracteres
             if (reporte && reporte.length > 2000) {
@@ -676,7 +409,7 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.deferReply(); 
         
         try {
-            let reporte = await compilarNoticiaExtendida();
+            let reporte = await compilarNoticiaExtendida(model, NoticiaDB);
             if (reporte && reporte.length > 2000) {
                 reporte = reporte.substring(0, 1995) + "...";
             }
@@ -721,6 +454,27 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) {
             console.error("Error al ejecutar /status:", error);
             await interaction.editReply("⚡ Falla en la consola de comandos. No pude verificar el estado de los servidores.");
+        }
+    }
+
+    // --- NUEVO COMANDO: /actualizaciones (Fase C) ---
+    if (interaction.commandName === 'actualizaciones') {
+        await interaction.deferReply(); 
+        
+        try {
+            const juegoElegido = interaction.options.getString('juego');
+            const reporteParche = await obtenerUltimoParche(juegoElegido, model);
+            
+            // Seguro de Discord (Límite de 2000 caracteres)
+            let mensajeFinal = reporteParche;
+            if (mensajeFinal && mensajeFinal.length > 2000) {
+                mensajeFinal = mensajeFinal.substring(0, 1995) + "...";
+            }
+            
+            await interaction.editReply(mensajeFinal);
+        } catch (error) {
+            console.error("Error al ejecutar /actualizaciones:", error);
+            await interaction.editReply("⚡ Falla crítica. No pude procesar el análisis del parche.");
         }
     }
 
@@ -792,7 +546,7 @@ client.on("ready", (c) => {
         if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
 
         try {
-            let reporte = await compilarReporteNoticias();
+            let reporte = await compilarReporteNoticias(model);
             
             // Seguro contra el límite de 2000 caracteres
             if (reporte && reporte.length > 2000) {
@@ -814,8 +568,8 @@ client.on("ready", (c) => {
         console.log("Iniciando redacción autónoma para la página web...");
         
         try {
-            // Genera la nota y la guarda en MongoDB
-            await compilarNoticiaExtendida();
+            // Genera la nota y la guarda en MongoDB (CORREGIDO EL DOBLE AWAIT)
+            await compilarNoticiaExtendida(model, NoticiaDB);
             console.log("Actualización web completada. Base de datos sincronizada.");
             
             // --- NUEVO: Aviso en Discord de la actualización Web ---
@@ -864,7 +618,53 @@ client.on("ready", (c) => {
         timezone: "America/Mexico_City"
     });
 
-});
+    // =======================================================
+    // MÓDULO H: RADAR AUTOMÁTICO DE PARCHES (2:00 PM DIARIO)
+    // =======================================================
+    cron.schedule('0 14 * * *', async () => {
+        console.log("Iniciando escaneo diario de parches de videojuegos...");
+        
+        // --- 1. LISTA TÁCTICA DE CANALES PARA GTA V ---
+        const canalesGTA = [
+            '867860009169059911', 
+            '867857989360418856',
+            '1129112695136845985',
+            '867859003950628915'
+        ];
+
+        try {
+            // Extraemos el último parche de GTA V
+            let reporteGTA = await obtenerUltimoParche('gta5', model);
+            
+            // Verificamos que sea un parche real y no un mensaje de error o vacío
+            if (reporteGTA && !reporteGTA.includes("No detecto transmisiones") && !reporteGTA.includes("Interferencia")) {
+                
+                let mensajeFinal = "🚨 **¡NUEVO INFORME SOBRE GTA V!** 🚨\n\n" + reporteGTA;
+                
+                // --- 2. SEGURO ANTI-LÍMITE (Corte de emergencia) ---
+                if (mensajeFinal.length > 2000) {
+                    mensajeFinal = mensajeFinal.substring(0, 1995) + "...";
+                }
+                
+                // --- 3. BOMBARDEO MULTI-CANAL ---
+                for (const idCanal of canalesGTA) {
+                    const canalDestino = client.channels.cache.get(idCanal);
+                    if (canalDestino) {
+                        await canalDestino.send(mensajeFinal);
+                    } else {
+                        console.warn(`Aviso Táctico: No pude encontrar el canal con ID ${idCanal}`);
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error("Fallo al emitir parches automáticos:", error);
+        }
+    }, {
+        timezone: "America/Mexico_City"
+    });
+
+}); // <-- AQUÍ SE CIERRA FINALMENTE EL EVENTO READY
 
 // ==========================================
 // INICIO DE SESIÓN EN DISCORD
