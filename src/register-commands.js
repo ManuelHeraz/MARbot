@@ -8,11 +8,11 @@ const commands = [
     },
 {
         name: "medallas",
-        description: "Muestra el banner de medallas de un marino (o el tuyo).",
+        description: "Muestra el banner de medallas de un integrnate (o el tuyo).",
         options: [
             {
-                name: "marino",
-                description: "Selecciona a un marino de la lista (déjalo en blanco para ver el tuyo).",
+                name: "miembro",
+                description: "Selecciona a un integrante de la lista (déjalo en blanco para ver el tuyo).",
                 type: ApplicationCommandOptionType.String,
                 required: false, // Es falso para que puedan mandarlo vacío y ver el propio
                 autocomplete: true // ¡Esta es la magia del menú desplegable!
@@ -21,11 +21,30 @@ const commands = [
     },
 {
         name: "noticias",
-        description: "Fuerza a MARbot a escanear la red y traer el reporte rápido.",
+        description: "Fuerza a MARbot a escanear las noticias sobre gaming.",
     },
     {
+    name: 'status',
+    description: 'Verifica si los servidores de las consolas o tiendas están caídos.',
+    options: [
+        {
+            name: 'plataforma',
+            description: 'Elige la plataforma a escanear',
+            type: 3, // El número 3 significa "STRING" (Texto) en Discord.js
+            required: true,
+            choices: [
+                { name: 'Xbox Live', value: 'xbox' },
+                { name: 'PlayStation Network', value: 'psn' },
+                { name: 'Steam', value: 'steam' },
+                { name: 'Epic Games', value: 'epic' },
+                { name: 'Nintendo', value: 'nintendo' }
+            ]
+        }
+    ]
+},
+    {
         name: "noticia-extendida",
-        description: "Genera una nota extendida para redes sociales y la guarda en la página web.",
+        description: "Genera una nota sobre una noticia del gaming y la guarda en la página web.",
     },
     {
     name: 'gratis',

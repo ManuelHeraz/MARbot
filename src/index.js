@@ -325,6 +325,75 @@ juegos.forEach(juego => {
 }
 
 // ==========================================
+// FUNCIÓN 4: RADAR DE ESTADO DE SERVIDORES (FASE B)
+// ==========================================
+async function obtenerStatusPlataforma(plataforma) {
+    try {
+        if (plataforma === 'epic') {
+            // Infiltración en la API pública de Epic Games
+            const data = await new Promise((resolve, reject) => {
+                const opciones = {
+                    hostname: 'status.epicgames.com',
+                    path: '/api/v2/status.json',
+                    method: 'GET'
+                };
+
+                const req = https.request(opciones, (res) => {
+                    let cuerpoDato = '';
+                    res.on('data', (chunk) => cuerpoDato += chunk);
+                    res.on('end', () => {
+                        try { resolve(JSON.parse(cuerpoDato)); } 
+                        catch (e) { reject(e); }
+                    });
+                });
+                req.on('error', (e) => reject(e));
+                req.end();
+            });
+
+            const estadoGlobal = data.status.description;
+            const indicador = estadoGlobal.includes("All Systems Operational") ? "🟢 **ÓPTIMO**" : "🔴 **FALLAS DETECTADAS**";
+            
+            return `📡 **Telemetría de Epic Games:**\nEstado actual: ${indicador}\nReporte oficial: *${estadoGlobal}*\nVer radar: https://status.epicgames.com/`;
+        }
+
+        // Respuestas tácticas para plataformas blindadas
+        const radares = {
+            'xbox': {
+                nombre: 'Xbox Live',
+                link: 'https://support.xbox.com/es-MX/xbox-live-status',
+                emoji: '🟢'
+            },
+            'psn': {
+                nombre: 'PlayStation Network',
+                link: 'https://status.playstation.com/es-mx/',
+                emoji: '🔵'
+            },
+            'steam': {
+                nombre: 'Steam',
+                link: 'https://steamstat.us/',
+                emoji: '💨'
+            },
+            'nintendo': {
+                nombre: 'Nintendo Switch Online',
+                link: 'https://www.nintendo.co.jp/netinfo/es/index.html',
+                emoji: '🔴'
+            }
+        };
+
+        const info = radares[plataforma];
+        if (info) {
+            return `${info.emoji} **Rastreo de ${info.nombre}:**\nLos servidores de esta plataforma están blindados contra escaneos de IA. \n🔗 **Revisa el radar oficial en tiempo real aquí:** ${info.link}`;
+        }
+
+        return "Plataforma no reconocida en mis bases de datos.";
+
+    } catch (error) {
+        console.error("Error al obtener status:", error);
+        return "⚡ Interferencia electromagnética. No pude acceder a los datos de los servidores en este momento.";
+    }
+}
+
+// ==========================================
 // 3. VARIABLES TÁCTICAS (LLENAR CON TUS IDs)
 // ==========================================
 const ID_CANAL_PRESENTACIONES = 'ID_DEL_CANAL_DONDE_SE_PRESENTAN'; 
@@ -635,6 +704,23 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) {
             console.error("Error al ejecutar /gratis:", error);
             await interaction.editReply("⚡ Error interno. No pude desplegar el radar de Epic Games.");
+        }
+    }
+
+    // --- NUEVO COMANDO: /status (Fase B) ---
+    if (interaction.commandName === 'status') {
+        await interaction.deferReply(); 
+        
+        try {
+            // Extraemos la opción que el usuario eligió en el menú desplegable
+            const plataformaElegida = interaction.options.getString('plataforma');
+            
+            const reporteStatus = await obtenerStatusPlataforma(plataformaElegida);
+            await interaction.editReply(reporteStatus);
+            
+        } catch (error) {
+            console.error("Error al ejecutar /status:", error);
+            await interaction.editReply("⚡ Falla en la consola de comandos. No pude verificar el estado de los servidores.");
         }
     }
 
