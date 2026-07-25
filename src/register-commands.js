@@ -28,6 +28,10 @@ const commands = [
         description: "Genera una nota extendida para redes sociales y la guarda en la página web.",
     },
     {
+    name: 'gratis',
+    description: 'Muestra los juegos que están gratis en Epic Games en este momento.'
+    },
+    {
         name: "embed",
         description: "envia un embed!",
     },

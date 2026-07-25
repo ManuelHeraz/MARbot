@@ -239,6 +239,53 @@ async function compilarNoticiaExtendida() {
 }
 
 // ==========================================
+// FUNCIÓN 3: RADAR DE EPIC GAMES (JUEGOS GRATIS)
+// ==========================================
+async function obtenerJuegoGratisEpic() {
+    try {
+        // Hacemos ping directo a la API de la tienda de Epic
+        const response = await fetch('https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=es-MX&country=MX&allowCountries=MX');
+        const data = await response.json();
+        
+        // Entramos a la ruta exacta donde guardan la lista de juegos
+        const juegos = data.data.Catalog.searchStore.elements;
+
+        let mensaje = "🎁 **¡ALERTA DE SUMINISTROS GRATUITOS EN EPIC GAMES!** 🎁\n\n";
+        let hayJuegos = false;
+
+        juegos.forEach(juego => {
+            // Filtramos SOLO los juegos que tienen una promoción activa en este momento
+            if (juego.promotions && juego.promotions.promotionalOffers && juego.promotions.promotionalOffers.length > 0) {
+                const ofertas = juego.promotions.promotionalOffers[0].promotionalOffers;
+                
+                if (ofertas.length > 0) {
+                    const oferta = ofertas[0];
+                    // Formateamos la fecha límite para que sea legible
+                    const fechaFin = new Date(oferta.endDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    
+                    // Buscamos la URL correcta del juego (Epic a veces la esconde en distintas variables)
+                    const slug = juego.catalogNs?.mappings?.[0]?.pageSlug || juego.productSlug || juego.urlSlug;
+                    const urlJuego = slug ? `https://store.epicgames.com/es-MX/p/${slug}` : `https://store.epicgames.com/es-MX/free-games`;
+
+                    mensaje += `🎮 **${juego.title}**\n`;
+                    mensaje += `📝 *${juego.description}*\n`;
+                    mensaje += `⏳ **Disponible hasta:** ${fechaFin}\n`;
+                    mensaje += `🔗 **Reclamar aquí:** ${urlJuego}\n\n`;
+                    
+                    hayJuegos = true;
+                }
+            }
+        });
+
+        if (!hayJuegos) return "Los radares no detectan juegos gratis en Epic Games en este momento. Volveré a escanear pronto.";
+        return mensaje;
+    } catch (error) {
+        console.error("Error al obtener juegos de Epic:", error);
+        return "⚡ Interferencia en los servidores de Epic Games. No pude decodificar su base de datos.";
+    }
+}
+
+// ==========================================
 // 3. VARIABLES TÁCTICAS (LLENAR CON TUS IDs)
 // ==========================================
 const ID_CANAL_PRESENTACIONES = 'ID_DEL_CANAL_DONDE_SE_PRESENTAN'; 
@@ -530,6 +577,19 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) {
             console.error("Error al generar nota extendida:", error);
             await interaction.editReply("⚡ Interferencia. No pude redactar el artículo web ahora mismo.");
+        }
+    }
+
+    // --- NUEVO COMANDO: /gratis ---
+    if (interaction.commandName === 'gratis') {
+        await interaction.deferReply(); 
+        
+        try {
+            const reporteEpic = await obtenerJuegoGratisEpic();
+            await interaction.editReply(reporteEpic);
+        } catch (error) {
+            console.error("Error al ejecutar /gratis:", error);
+            await interaction.editReply("⚡ Error de conexión. No pude desplegar el radar de Epic Games.");
         }
     }
 
