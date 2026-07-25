@@ -276,30 +276,39 @@ async function obtenerJuegoGratisEpic() {
         
         // Entramos a la ruta exacta donde guardan la lista de juegos
         const juegos = data.data.Catalog.searchStore.elements;
-
-        let mensaje = "🎁 **¡ALERTA DE SUMINISTROS GRATUITOS EN EPIC GAMES!** 🎁\n\n";
+        let mensaje = "🎁 **¡ALERTA DE JUEGOS GRATUITOS EN EPIC GAMES!** 🎁\n\n";
         let hayJuegos = false;
+        let juegosAgregados = 0; // NUEVO: Contador táctico
 
         juegos.forEach(juego => {
-            // Filtramos SOLO los juegos que tienen una promoción activa en este momento
+            // Filtramos SOLO los juegos con promoción activa
             if (juego.promotions && juego.promotions.promotionalOffers && juego.promotions.promotionalOffers.length > 0) {
+                
+                // Límite táctico: Máximo 4 juegos para no romper el límite de Discord
+                if (juegosAgregados >= 4) return; 
+
                 const ofertas = juego.promotions.promotionalOffers[0].promotionalOffers;
                 
                 if (ofertas.length > 0) {
                     const oferta = ofertas[0];
-                    // Formateamos la fecha límite para que sea legible
                     const fechaFin = new Date(oferta.endDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     
-                    // Buscamos la URL correcta del juego
                     const slug = juego.catalogNs?.mappings?.[0]?.pageSlug || juego.productSlug || juego.urlSlug;
                     const urlJuego = slug ? `https://store.epicgames.com/es-MX/p/${slug}` : `https://store.epicgames.com/es-MX/free-games`;
 
+                    // Recortamos descripciones masivas (máximo 120 caracteres)
+                    let descCorta = juego.description || "Sin descripción.";
+                    if (descCorta.length > 120) {
+                        descCorta = descCorta.substring(0, 117) + "...";
+                    }
+
                     mensaje += `🎮 **${juego.title}**\n`;
-                    mensaje += `📝 *${juego.description}*\n`;
+                    mensaje += `📝 *${descCorta}*\n`;
                     mensaje += `⏳ **Disponible hasta:** ${fechaFin}\n`;
-                    mensaje += `🔗 **Reclamar aquí:** ${urlJuego}\n\n`;
+                    mensaje += `🔗 **Reclamar:** ${urlJuego}\n\n`;
                     
                     hayJuegos = true;
+                    juegosAgregados++;
                 }
             }
         });
@@ -607,16 +616,22 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // --- NUEVO COMANDO: /gratis ---
+// --- COMANDO: /gratis ---
     if (interaction.commandName === 'gratis') {
         await interaction.deferReply(); 
         
         try {
-            const reporteEpic = await obtenerJuegoGratisEpic();
+            let reporteEpic = await obtenerJuegoGratisEpic();
+            
+            // SEGURO ANTI-LÍMITE DE DISCORD
+            if (reporteEpic && reporteEpic.length > 2000) {
+                reporteEpic = reporteEpic.substring(0, 1995) + "...";
+            }
+            
             await interaction.editReply(reporteEpic);
         } catch (error) {
             console.error("Error al ejecutar /gratis:", error);
-            await interaction.editReply("⚡ Error de conexión. No pude desplegar el radar de Epic Games.");
+            await interaction.editReply("⚡ Error interno. No pude desplegar el radar de Epic Games.");
         }
     }
 
