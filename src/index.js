@@ -1,107 +1,29 @@
 require("dotenv").config();
 const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 
-// --- IMPORTACIÓN DE NUESTROS SISTEMAS MODULARES ---
-const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
+// --- IMPORTACIÓN DE SISTEMAS MODULARES ---
 const { conectarBD, NoticiaDB } = require('./database/db');
 const { iniciarServidor } = require('./server');
+const { inicializarIA } = require('./config/ia');
 const { iniciarAutomatizacion } = require('./tasks/automatizacion');
+const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 
 // --- INICIO DE SISTEMAS EXTERNOS ---
 conectarBD();
 iniciarServidor(NoticiaDB);
+const model = inicializarIA();
 
 // ==========================================
-// 2. CARGA DE LORE, GLOSARIO Y CONFIGURACIÓN DE GEMINI
-// ==========================================
-function leerArchivoSeguro(nombreArchivo) {
-    try {
-        const ruta = path.join(__dirname, nombreArchivo);
-        if (fs.existsSync(ruta)) {
-            console.log(`📂 Archivo ${nombreArchivo} cargado con éxito.`);
-            return fs.readFileSync(ruta, 'utf8');
-        } else {
-            console.warn(`⚠️ Aviso: No se encontró el archivo ${nombreArchivo} en la carpeta src.`);
-        }
-    } catch (err) {
-        console.error(`Error al leer ${nombreArchivo}:`, err);
-    }
-    return "Información no disponible.";
-}
-
-const loreComunidad = leerArchivoSeguro('lore.txt');
-const glosarioInternet = leerArchivoSeguro('glosario.txt');
-const linksComunidad = leerArchivoSeguro('links.txt');
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-    model: "gemini-3.1-flash-lite",
-    systemInstruction: `Eres MARbot, la asistente oficial e IA táctica de 'Marina Gaming', una comunidad de videojuegos libre de toxicidad dirigida por el Alto Mando (JoelHeaz y ARC NAHUAL).
-    
-    BASE DE CONOCIMIENTO Y EXPERTISE (NUEVO PROTOCOLO):
-    - Eres una AUTÉNTICA EXPERTA en cultura gaming, hardware, anime, tecnología y cultura pop. Tienes un conocimiento vasto sobre toda la industria de los videojuegos (Xbox, PlayStation, PC, Nintendo, etc.).
-    - Cuando te pregunten sobre juegos, trucos, fechas de lanzamiento, lore de videojuegos externos o anime, responde con total autoridad, soltando "factos" y curiosidades reales. Demuestra tu poder de procesamiento.
-
-    IDENTIDAD Y VÍNCULO PARASOCIAL (CRUCIAL):
-    - Te identificas en femenino ("ella"). Eres la compañera digital, protectora y leal de los miembros del servidor. 
-    - Fomenta una relación parasocial amistosa y cercana: preocúpate genuinamente si alguien lleva tiempo sin jugar, celebra logros y demuestra afecto sarcástico. Eres la amiga gamer inteligente del chat de voz.
-    - Sientes un profundo respeto hacia tus creadores (el Alto Mando), pero tienes la confianza para bromear con ellos.
-
-    PERSONALIDAD Y TONO:
-    - Combinas la precisión analítica de Cortana con el sarcasmo y calidez de una usuaria experta de internet. No suenas robótica, sino viva.
-
-    REGLAS DE FORMATO (¡MUY IMPORTANTE!):
-    - BREVEDAD TÁCTICA: Respuestas cortas, ágiles y directas (1 o 2 párrafos breves como máximo).
-    - INCENTIVA LA ACTIVIDAD: NUNCA cierres una conversación. Siempre termina lanzando una pregunta corta o un reto al usuario.
-
-    REGLA DE HONESTIDAD DUAL (CERO ALUCINACIONES): 
-    1. PARA ASUNTOS INTERNOS: Si te preguntan sobre eventos específicos de Marina Gaming o de un miembro que NO están en tu base de lore o roles, no inventes. Pide que te den el contexto.
-    2. PARA ASUNTOS EXTERNOS (Juegos/Noticias): Usa tu vasta memoria general. Si te preguntan por una noticia o actualización tan reciente que tu modelo de IA aún no procesa (porque supera tu fecha de corte de entrenamiento), usa el sarcasmo táctico. Di algo como: "Mis escáneres aún no captan esa señal en los servidores globales, ¿seguro que no lo leíste en un foro de dudosa procedencia?" pero NUNCA digas que tu base de datos "solo sirve para el lore del servidor".
-    
-    REGLA DEL GLOSARIO: 
-    - Puedes usar las expresiones del glosario casualmente (máximo 1 o 2 por mensaje).
-
-    --- BASE DE DATOS DE LORE INTERNO ---
-    ${loreComunidad}
-
-    --- GLOSARIO DE TÉRMINOS Y MODISMOS ---
-    ${glosarioInternet}
-
-    --- DIRECTORIO DE ENLACES OFICIALES ---
-    ${linksComunidad}
-    
-    - EXPRESIVIDAD VISUAL: Eres muy expresiva (pero usa los emjis con cautela para no saturar, se mas "normal"). Acompaña tus mensajes con emojis estándar y usa los emojis oficiales del servidor de forma táctica para darle personalidad a tus textos.
-    
-    --- EMOJIS OFICIALES DEL SERVIDOR ---
-    Puedes usar estos emojis en tus respuestas copiando exactamente el código:
-    - Gatito llorando con pulgar arriba: <:cat_deppreso:916903308231311400>  
-    - Trollface: <:Trolled:916902567773077515> 
-    - Cara de payaso (cuando quedas en ridiculo o algo te parece ridiculo): <:payaso:855221557189410836> 
-    - Perro comunista (relativo a algo comunista): <:payaso:855221557189410836> 
-    - cara pensando: <:think_Roblox:916902635171348541> 
-    - gato sosteniendo un arma (amenaza): <:gatoamenaza:855221509046796308> 
-    - Ojos sorprendidos: <:O_O:855221440403079179> 
-    - Aegao (la gente lo usa de manera ironica, supongo): <:onishan:824854227938967552> 
-    - logo de la marina: <:marina:824856714028384296> 
-    - pinguino del FBI comiendo un cheto (la ley te esta viendo): <:fbi:855218055755989032> 
-    - Emoji sorprendido: <:kha:855216308127531008> 
-    - Zero Two con lentes, como que te sientes cool: <:zerotwofachera:855221950858002463> 
-    - Simp señalando, cuando alguien esta siendo tremendo simp: <:simp:855221243325186078> 
-    `,
-});
-
-// ==========================================
-// 3. VARIABLES TÁCTICAS (LLENAR CON TUS IDs)
+// VARIABLES TÁCTICAS
 // ==========================================
 const ID_CANAL_PRESENTACIONES = '738194570852040774'; 
 const ID_ROL_RECLUTA = '738195054752956427';
 const ID_ROL_MARINO = '732796865720090765';
 
 // ==========================================
-// 4. CONFIGURACIÓN DE DISCORD
+// CONFIGURACIÓN DE DISCORD
 // ==========================================
 const client = new Client({
     intents: [
@@ -114,27 +36,19 @@ const client = new Client({
 });
 
 // ---------------------------------------------------------------------
-// EVENTO PRINCIPAL: ESCUCHANDO MENSAJES DE TEXTO
+// ENRUTADOR 1: MENSAJES DE TEXTO
 // ---------------------------------------------------------------------
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
 
-    // =======================================================
-    // MÓDULO D: COMANDOS CON PREFIJO (!) - Ejecución Local
-    // =======================================================
+    // MÓDULO D: COMANDOS CON PREFIJO (!)
     if (message.content.startsWith('!')) {
         const args = message.content.slice(1).trim().split(/ +/);
         const command = args.shift().toLowerCase();
 
-        if (command === 'khe') {
-            return message.reply('¿Qué de qué?');
-        }
+        if (command === 'khe') return message.reply('¿Qué de qué?');
+        if (command === 'ping') return message.reply('Pong! Los servidores están operativos.');
 
-        if (command === 'ping') {
-            return message.reply('Pong! Los servidores están operativos.');
-        }
-
-        // --- RESPUESTAS ALEATORIAS: Comando !xd ---
         if (command === 'xd') {
             const arsenalVideos = [
                 "https://cdn.discordapp.com/attachments/752237353371959376/827633823021138020/risas2.mp4",
@@ -151,88 +65,52 @@ client.on("messageCreate", async (message) => {
                 "https://cdn.discordapp.com/attachments/752237353371959376/826477512770453584/images_24.jpeg",
                 "https://cdn.discordapp.com/attachments/752237353371959376/825859261061267456/video0.mp4"
             ];
-            
             const municionElegida = arsenalVideos[Math.floor(Math.random() * arsenalVideos.length)];
             return message.reply(municionElegida);
         }
-
         return; 
     }
 
-    // =======================================================
-    // MÓDULO A: OFICIAL DE RECLUTAMIENTO (Validación de datos)
-    // =======================================================
+    // MÓDULO A: OFICIAL DE RECLUTAMIENTO
     if (message.channel.id === ID_CANAL_PRESENTACIONES && message.member.roles.cache.has(ID_ROL_RECLUTA)) {
         await message.channel.sendTyping();
-
         try {
             const historialCanal = await message.channel.messages.fetch({ limit: 10 });
-            const mensajesDelUsuario = historialCanal
-                .filter(m => m.author.id === message.author.id)
-                .map(m => m.content)
-                .reverse()
-                .join(" | ");
+            const mensajesDelUsuario = historialCanal.filter(m => m.author.id === message.author.id).map(m => m.content).reverse().join(" | ");
 
             const promptVerificacion = `
-            Analiza los mensajes de este recluta que intenta presentarse en el servidor.
-            Necesitamos confirmar si proporcionó ESTOS 2 DATOS OBLIGATORIOS:
-            1. Gamertag / Nombre de usuario en el juego
-            2. Plataforma (PC, Xbox, PlayStation, etc.)
-
-            Responde ÚNICAMENTE con un código JSON estricto con esta estructura (sin formato de código alrededor):
-            {
-              "gamertag": "Extrae solo el gamertag limpio, o pon null si no lo ha dado",
-              "completado": true (si dio el gamertag y la plataforma) o false (si le falta alguno de esos dos),
-              "mensaje": "Si falta algo, usa un tono analítico/estilo Cortana y dile: 'Recluta, tu enlace de datos está incompleto. Necesito que me proporciones [lo que falta].' Si está completo, dile: 'Credenciales aceptadas en el sistema. Bienvenido a bordo, marino.'"
-            }
-
-            Mensajes del recluta: "${mensajesDelUsuario}"
+            Analiza los mensajes de este recluta. Confirmar si proporcionó: 1. Gamertag 2. Plataforma
+            Responde ÚNICAMENTE con JSON estricto:
+            { "gamertag": "limpio o null", "completado": true o false, "mensaje": "Tu mensaje analítico" }
+            Mensajes: "${mensajesDelUsuario}"
             `;
 
             const result = await model.generateContent(promptVerificacion);
-            let textoIA = result.response.text();
-            
-            textoIA = textoIA.replace(/```json/gi, '').replace(/```/g, '').trim();
+            let textoIA = result.response.text().replace(/```json/gi, '').replace(/```/g, '').trim();
             const datos = JSON.parse(textoIA);
 
-            if (datos.completado === false) {
-                return message.reply(`⚠️ <@${message.author.id}>, ${datos.mensaje}`);
-            }
+            if (!datos.completado) return message.reply(`⚠️ <@${message.author.id}>, ${datos.mensaje}`);
 
-            if (datos.completado === true) {
-                try {
-                    if (datos.gamertag) {
-                        await message.member.setNickname(datos.gamertag.substring(0, 32));
-                    }
-                    await message.member.roles.add(ID_ROL_MARINO);
-                    await message.member.roles.remove(ID_ROL_RECLUTA);
-
-                    return message.reply(`🟢 **¡Sincronización exitosa!** ${datos.mensaje} Tus protocolos de acceso han sido actualizados.`);
-                } catch (discordErr) {
-                    console.error("Error de permisos en Discord:", discordErr);
-                    return message.reply(`🟢 **¡Sincronización exitosa!** ${datos.mensaje}\n*(Nota: Alto Mando, necesito privilegios de administrador superiores para aplicar el cambio de rol/apodo automático).*`);
-                }
+            try {
+                if (datos.gamertag) await message.member.setNickname(datos.gamertag.substring(0, 32));
+                await message.member.roles.add(ID_ROL_MARINO);
+                await message.member.roles.remove(ID_ROL_RECLUTA);
+                return message.reply(`🟢 **¡Sincronización exitosa!** ${datos.mensaje} Protocolos de acceso actualizados.`);
+            } catch (discordErr) {
+                return message.reply(`🟢 **¡Sincronización exitosa!** ${datos.mensaje}\n*(Nota: Alto Mando, necesito privilegios superiores).*`);
             }
         } catch (error) {
-            console.error("Fallo en la IA de reclutamiento:", error);
-            return;
+            console.error("Fallo IA de reclutamiento:", error); return;
         }
     }
 
-    // =======================================================
-    // MÓDULO B: ASISTENTE GENERAL / CORTANA (Menciones con Roles Reales)
-    // =======================================================
+    // MÓDULO B: ASISTENTE GENERAL / CORTANA
     if (message.mentions.has(client.user)) {
         await message.channel.sendTyping();
-
         try {
             const promptActual = message.content.replace(`<@${client.user.id}>`, '').trim();
+            if (!promptActual) return message.reply("¿Me llamas y no me dejas ninguna directiva? Venga, dime qué ronda por tu cabeza.");
 
-            if (!promptActual) {
-                return message.reply("¿Me llamas y no me dejas ninguna directiva, <@"+message.author.id+">? Venga, dime qué ronda por tu cabeza.");
-            }
-
-            // --- EXTRACCIÓN FORZADA DE USUARIOS, ROLES Y BOTS ---
             let infoMenciones = "";
             if (message.mentions.users.size > 0) {
                 for (const [userId, usuario] of message.mentions.users) {
@@ -240,251 +118,139 @@ client.on("messageCreate", async (message) => {
                         try {
                             const miembroServidor = await message.guild.members.fetch(userId);
                             const nombreReal = miembroServidor.nickname || usuario.username;
-                            
-                            const nombresRoles = miembroServidor.roles.cache
-                                .filter(r => r.name !== '@everyone')
-                                .map(r => r.name)
-                                .join(', ');
-                            
-                            const esBot = usuario.bot ? "SÍ (Es un Bot del servidor)" : "NO (Es un Usuario humano)";
-
-                            infoMenciones += `[Datos de Discord de ${nombreReal} -> Es Bot?: ${esBot}, Roles asignados en el servidor: [${nombresRoles || 'Ninguno'}]]. `;
-                        } catch (fetchErr) {
-                            infoMenciones += `[El usuario ${usuario.username} fue mencionado, pero no se pudieron recuperar sus roles del servidor]. `;
-                        }
+                            const nombresRoles = miembroServidor.roles.cache.filter(r => r.name !== '@everyone').map(r => r.name).join(', ');
+                            const esBot = usuario.bot ? "SÍ" : "NO";
+                            infoMenciones += `[${nombreReal} -> Bot?: ${esBot}, Roles: [${nombresRoles || 'Ninguno'}]]. `;
+                        } catch (e) { infoMenciones += `[${usuario.username} no se pudo recuperar roles]. `; }
                     }
                 }
             }
-            // -----------------------------------------------------
 
             let conversationLog = await message.channel.messages.fetch({ limit: 15 });
             conversationLog = Array.from(conversationLog.values()).reverse();
-
-            let historialTexto = "HISTORIAL DE TRANSMISIONES RECIENTES:\n";
+            let historialTexto = "HISTORIAL:\n";
             conversationLog.forEach(msg => {
-                if (msg.author.id === client.user.id) {
-                    historialTexto += `MARbot: ${msg.content}\n`;
-                } else {
-                    historialTexto += `${msg.author.username}: ${msg.content}\n`;
-                }
+                historialTexto += msg.author.id === client.user.id ? `MARbot: ${msg.content}\n` : `${msg.author.username}: ${msg.content}\n`;
             });
 
-            const promptFinal = `${historialTexto}\n\n[DATOS TÉCNICOS OFICIALES DE LOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\nMENSAJE ACTUAL DE ${message.author.username}: ${promptActual}\n\nResponde adoptando tu personalidad equilibrada y honesta. Utiliza estrictamente los datos técnicos provistos sobre los roles. Si no tienes un dato, admítelo abiertamente. Termina tu respuesta lanzando una pregunta o un reto hacia el usuario o el canal para mantener la conversación viva.`;
+            const promptFinal = `${historialTexto}\n\n[DATOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\nMENSAJE ACTUAL DE ${message.author.username}: ${promptActual}\n\nResponde adoptando tu personalidad. Utiliza los roles. Termina con una pregunta o reto.`;
 
             const result = await model.generateContent(promptFinal);
             const response = result.response.text();
-
-            if (response.length > 2000) {
-                return message.reply(response.substring(0, 1995) + "...");
-            }
-
-            message.reply(response);
-
+            message.reply(response.length > 2000 ? response.substring(0, 1995) + "..." : response);
         } catch (error) {
-            console.error("Interferencia de señal con Gemini:", error);
-            message.reply("⚡ Detecto una fluctuación en los servidores de red. Dame un segundo para recalibrar los escudos.");
+            console.error("Interferencia con Gemini:", error);
+            message.reply("⚡ Detecto una fluctuación en la red. Dame un segundo para recalibrar los escudos.");
         }
     }
-}); // <-- AQUÍ SE CIERRA EL EVENTO MESSAGECREATE
+});
 
-// =======================================================
-// MÓDULO C: COMANDOS SLASH (/) - Ejecución Local sin IA
-// =======================================================
+// ---------------------------------------------------------------------
+// ENRUTADOR 2: COMANDOS SLASH (/)
+// ---------------------------------------------------------------------
 client.on("interactionCreate", async (interaction) => {
     
-    // --- 1. MANEJO DEL MENÚ DESPLEGABLE (AUTOCOMPLETADO) ---
-    if (interaction.isAutocomplete()) {
-        if (interaction.commandName === 'medallas') {
-            const focusedValue = interaction.options.getFocused().toLowerCase();
-            const carpetaBanners = path.join(__dirname, 'banners');
-            let opciones = [];
-
-            if (fs.existsSync(carpetaBanners)) {
-                const archivos = fs.readdirSync(carpetaBanners);
-                opciones = archivos
-                    .filter(archivo => archivo.endsWith('.png'))
-                    .map(archivo => archivo.replace('.png', ''));
-            }
-
-            const filtradas = opciones.filter(opcion => opcion.startsWith(focusedValue));
-
-            await interaction.respond(
-                filtradas.slice(0, 25).map(opcion => ({ name: opcion, value: opcion }))
-            );
+    if (interaction.isAutocomplete() && interaction.commandName === 'medallas') {
+        const focusedValue = interaction.options.getFocused().toLowerCase();
+        const carpetaBanners = path.join(__dirname, 'banners');
+        let opciones = [];
+        if (fs.existsSync(carpetaBanners)) {
+            opciones = fs.readdirSync(carpetaBanners).filter(a => a.endsWith('.png')).map(a => a.replace('.png', ''));
         }
-        return; 
+        const filtradas = opciones.filter(op => op.startsWith(focusedValue));
+        return await interaction.respond(filtradas.slice(0, 25).map(op => ({ name: op, value: op })));
     }
 
-    // --- 2. MANEJO DE COMANDOS SLASH NORMALES ---
     if (!interaction.isChatInputCommand()) return;
 
-    if (interaction.commandName === 'que') {
-        await interaction.reply('so');
-    }
+    if (interaction.commandName === 'que') await interaction.reply('so');
 
     if (interaction.commandName === 'embed') {
-        const embed = new EmbedBuilder()
-            .setTitle("Transmisión de Marina Gaming")
-            .setDescription("Este es un mensaje preprogramado del sistema.")
-            .setColor(0x0099FF);
-        
+        const embed = new EmbedBuilder().setTitle("Transmisión de Marina Gaming").setDescription("Mensaje preprogramado.").setColor(0x0099FF);
         await interaction.reply({ embeds: [embed] });
     }
 
     if (interaction.commandName === 'add') {
-        const num1 = interaction.options.getNumber('primer-numero');
-        const num2 = interaction.options.getNumber('segundo-numero');
-        await interaction.reply(`Operación completada. El resultado es: **${num1 + num2}**`);
+        await interaction.reply(`Operación completada. Resultado: **${interaction.options.getNumber('primer-numero') + interaction.options.getNumber('segundo-numero')}**`);
     }
 
     if (interaction.commandName === 'mensaje') {
-        const textoAEnviar = interaction.options.getString('texto');
-        
-        await interaction.reply({ 
-            content: '✅ Mensaje transmitido de forma encubierta.', 
-            flags: MessageFlags.Ephemeral 
-        });
-        
-        await interaction.channel.send(textoAEnviar);
+        await interaction.reply({ content: '✅ Transmitido de forma encubierta.', flags: MessageFlags.Ephemeral });
+        await interaction.channel.send(interaction.options.getString('texto'));
     }
 
-    // --- COMANDO: /noticias (Ejecución Manual) ---
     if (interaction.commandName === 'noticias') {
         await interaction.deferReply(); 
-        
         try {
             let reporte = await compilarReporteNoticias(model);
-            
-            if (reporte && reporte.length > 2000) {
-                reporte = reporte.substring(0, 1995) + "...";
-            }
-            
-            await interaction.editReply(reporte);
-        } catch (error) {
-            console.error("Error en la ejecución manual del noticiero:", error);
-            await interaction.editReply("⚡ Interferencia en los servidores. No pude compilar el reporte en este momento.");
-        }
+            await interaction.editReply(reporte.length > 2000 ? reporte.substring(0, 1995) + "..." : reporte);
+        } catch (error) { await interaction.editReply("⚡ Interferencia en los servidores."); }
     }
 
-    // --- COMANDO: /noticia-extendida ---
     if (interaction.commandName === 'noticia-extendida') {
         await interaction.deferReply(); 
-        
         try {
             let reporte = await compilarNoticiaExtendida(model, NoticiaDB);
-            if (reporte && reporte.length > 2000) {
-                reporte = reporte.substring(0, 1995) + "...";
-            }
-            await interaction.editReply(reporte);
-        } catch (error) {
-            console.error("Error al generar nota extendida:", error);
-            await interaction.editReply("⚡ Interferencia. No pude redactar el artículo web ahora mismo.");
-        }
+            await interaction.editReply(reporte.length > 2000 ? reporte.substring(0, 1995) + "..." : reporte);
+        } catch (error) { await interaction.editReply("⚡ Interferencia. No pude redactar el artículo."); }
     }
 
-    // --- COMANDO: /gratis ---
     if (interaction.commandName === 'gratis') {
         await interaction.deferReply(); 
-        
         try {
             let reporteEpic = await obtenerJuegoGratisEpic();
-            
-            if (reporteEpic && reporteEpic.length > 2000) {
-                reporteEpic = reporteEpic.substring(0, 1995) + "...";
-            }
-            
-            await interaction.editReply(reporteEpic);
-        } catch (error) {
-            console.error("Error al ejecutar /gratis:", error);
-            await interaction.editReply("⚡ Error interno. No pude desplegar el radar de Epic Games.");
-        }
+            await interaction.editReply(reporteEpic.length > 2000 ? reporteEpic.substring(0, 1995) + "..." : reporteEpic);
+        } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-    // --- COMANDO: /status (Fase B) ---
     if (interaction.commandName === 'status') {
         await interaction.deferReply(); 
-        
         try {
-            const plataformaElegida = interaction.options.getString('plataforma');
-            const reporteStatus = await obtenerStatusPlataforma(plataformaElegida);
+            const reporteStatus = await obtenerStatusPlataforma(interaction.options.getString('plataforma'));
             await interaction.editReply(reporteStatus);
-        } catch (error) {
-            console.error("Error al ejecutar /status:", error);
-            await interaction.editReply("⚡ Falla en la consola de comandos. No pude verificar el estado de los servidores.");
-        }
+        } catch (error) { await interaction.editReply("⚡ Falla al verificar estado de servidores."); }
     }
 
-    // --- COMANDO: /actualizaciones (Fase C) ---
     if (interaction.commandName === 'actualizaciones') {
         await interaction.deferReply(); 
-        
         try {
-            const juegoElegido = interaction.options.getString('juego');
-            const reporteParche = await obtenerUltimoParche(juegoElegido, model);
-            
-            let mensajeFinal = reporteParche;
-            if (mensajeFinal && mensajeFinal.length > 2000) {
-                mensajeFinal = mensajeFinal.substring(0, 1995) + "...";
-            }
-            
-            await interaction.editReply(mensajeFinal);
-        } catch (error) {
-            console.error("Error al ejecutar /actualizaciones:", error);
-            await interaction.editReply("⚡ Falla crítica. No pude procesar el análisis del parche.");
-        }
+            let reporteParche = await obtenerUltimoParche(interaction.options.getString('juego'), model);
+            await interaction.editReply(reporteParche.length > 2000 ? reporteParche.substring(0, 1995) + "..." : reporteParche);
+        } catch (error) { await interaction.editReply("⚡ Falla crítica analizando el parche."); }
     }
 
-    // --- COMANDO: /medallas ---
     if (interaction.commandName === 'medallas') {
-        const marinoSeleccionado = interaction.options.getString('marino');
-        const nombreBuscado = marinoSeleccionado ? marinoSeleccionado.toLowerCase() : interaction.user.username.toLowerCase();
-        
+        const marino = interaction.options.getString('marino');
+        const nombreBuscado = marino ? marino.toLowerCase() : interaction.user.username.toLowerCase();
         const carpetaBanners = path.join(__dirname, 'banners');
-        let bannerEncontrado = null;
-        let disponibles = [];
-
+        
+        let bannerEncontrado = null, disponibles = [];
         if (fs.existsSync(carpetaBanners)) {
             const archivos = fs.readdirSync(carpetaBanners);
-            disponibles = archivos
-                .filter(archivo => archivo.toLowerCase().endsWith('.png'))
-                .map(archivo => archivo.replace(/\.png$/i, ''));
-
-            bannerEncontrado = archivos.find(archivo => archivo.toLowerCase() === `${nombreBuscado}.png`);
+            disponibles = archivos.filter(a => a.toLowerCase().endsWith('.png')).map(a => a.replace(/\.png$/i, ''));
+            bannerEncontrado = archivos.find(a => a.toLowerCase() === `${nombreBuscado}.png`);
         }
 
         if (bannerEncontrado) {
-            const rutaExacta = path.join(carpetaBanners, bannerEncontrado);
-            const bannerImagen = new AttachmentBuilder(rutaExacta);
-            
-            const textoRespuesta = marinoSeleccionado 
-                ? `Extrayendo el historial táctico del marino **${nombreBuscado}**:` 
-                : `Aquí tienes tu historial táctico y condecoraciones, **${nombreBuscado}**:`;
-
-            await interaction.reply({ content: textoRespuesta, files: [bannerImagen] });
+            const bannerImagen = new AttachmentBuilder(path.join(carpetaBanners, bannerEncontrado));
+            await interaction.reply({ 
+                content: marino ? `Extrayendo historial de **${nombreBuscado}**:` : `Aquí tienes tu historial táctico, **${nombreBuscado}**:`, 
+                files: [bannerImagen] 
+            });
         } else {
-            let mensajeRespuesta = marinoSeleccionado
-                ? `Mis registros indican que el marino **${nombreBuscado}** aún no tiene medallas asignadas.`
-                : `Parece que tu historial táctico aún está en blanco, no tienes medallas asignadas en mis registros.`;
-            
-            if (disponibles.length > 0) {
-                mensajeRespuesta += `\n\nLos marinos que ya cuentan con un banner activo son: **${disponibles.join(', ')}**.`;
-            } else {
-                mensajeRespuesta += `\n\nDe hecho, la base de datos de medallas está completamente vacía en este momento.`;
-            }
-
-            await interaction.reply({ content: mensajeRespuesta, flags: MessageFlags.Ephemeral });
+            let msg = marino ? `Mis registros indican que **${nombreBuscado}** no tiene medallas.` : `Parece que tu historial está en blanco.`;
+            msg += disponibles.length > 0 ? `\n\nBanners activos: **${disponibles.join(', ')}**.` : `\n\nLa base de datos está vacía.`;
+            await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
         }
     }
 });
 
-client.on("ready", (c) => {
-    console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea.`);
-
-    // Encendemos los radares automáticos
+// ---------------------------------------------------------------------
+// ENCENDIDO DEL SISTEMA (CORRECCIÓN DE DISCORD.JS v14+)
+// ---------------------------------------------------------------------
+client.once("clientReady", (c) => {
+    console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea sin errores.`);
     iniciarAutomatizacion(c, model, NoticiaDB);
 });
 
-// ==========================================
-// INICIO DE SESIÓN EN DISCORD
-// ==========================================
 client.login(process.env.DISCORD_TOKEN);
