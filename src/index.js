@@ -1,51 +1,22 @@
 require("dotenv").config();
 const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const cron = require('node-cron');
-const mongoose = require('mongoose'); // NUEVO
-const cors = require('cors'); // NUEVO
+// --- IMPORTACIÓN DE NUESTROS SISTEMAS MODULARES ---
 const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
+const { conectarBD, NoticiaDB } = require('./database/db');
+const { iniciarServidor } = require('./server');
+const { iniciarAutomatizacion } = require('./tasks/automatizacion');
+
+// --- INICIO DE SISTEMAS EXTERNOS ---
+conectarBD();
+iniciarServidor(NoticiaDB);
 
 // ==========================================
-// BASE DE DATOS MONGODB
-// ==========================================
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('📦 Bóveda de MongoDB conectada con éxito.'))
-    .catch(err => console.error('Error al conectar a MongoDB:', err));
-
-// Estructura de la información que enviaremos a la base de datos
-const noticiaSchema = new mongoose.Schema({
-    texto: String,
-    // El índice TTL: Destruye el documento 14 días (14d) después de la fecha de creación
-    fecha: { type: Date, default: Date.now, expires: '14d' } 
-});
-const NoticiaDB = mongoose.model('Noticia', noticiaSchema);
-
-// ==========================================
-// 1. CONFIGURACIÓN DEL SERVIDOR WEB Y API
-// ==========================================
-const app = express();
-app.use(cors()); // Esto permite que GitHub Pages lea los datos sin ser bloqueado
-
-app.get('/', (req, res) => res.send('El sistema de comunicaciones de Marina Gaming está en línea.'));
-
-// --- NUEVA RUTA API PARA TU PÁGINA WEB ---
-app.get('/api/noticias', async (req, res) => {
-    try {
-        // Busca las 10 noticias más recientes, ordenadas de la más nueva a la más vieja
-        const noticias = await NoticiaDB.find().sort({ fecha: -1 }).limit(10);
-        res.json(noticias);
-    } catch (error) {
-        console.error("Error en la API:", error);
-        res.status(500).json({ error: 'Interferencia al leer la base de datos' });
-    }
-});
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`📡 Señal web transmitiendo en puerto ${port}`));
+// 2. CARGA DE LORE, GLOSARIO Y CONFIGURACIÓN DE GEMINI...
+// (El resto de tu código continúa aquí abajo igual que siempre)
+const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 
 // ==========================================
 // 2. CARGA DE LORE, GLOSARIO Y CONFIGURACIÓN DE GEMINI
@@ -390,7 +361,7 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.deferReply(); 
         
         try {
-            let reporte = compilarReporteNoticias(model);
+            let reporte = await compilarReporteNoticias(model);
             
             // Seguro contra el límite de 2000 caracteres
             if (reporte && reporte.length > 2000) {
@@ -534,137 +505,9 @@ client.on("interactionCreate", async (interaction) => {
 client.on("ready", (c) => {
     console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea.`);
 
-    // =======================================================
-    // MÓDULO E: NOTICIERO AUTOMATIZADO (11 AM y 11 PM)
-    // =======================================================
-    cron.schedule('0 11,23 * * *', async () => {
-        console.log("Iniciando escaneo automático de noticias RSS (Resumen Corto)...");
-        
-        const ID_CANAL_NOTICIAS = '782813647629582366'; // Tu canal de noticias
-        const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
-        
-        if (!canalNoticias) return console.error("Error Táctico: No se encontró el canal de noticias.");
-
-        try {
-            let reporte = await compilarReporteNoticias(model);
-            
-            // Seguro contra el límite de 2000 caracteres
-            if (reporte && reporte.length > 2000) {
-                reporte = reporte.substring(0, 1995) + "...";
-            }
-            
-            if (reporte) await canalNoticias.send(reporte);
-        } catch (error) {
-            console.error("Fallo al emitir noticias programadas:", error);
-        }
-    }, {
-        timezone: "America/Mexico_City"
-    });
-
-    // =======================================================
-    // MÓDULO F: PUBLICACIÓN WEB AUTÓNOMA (12:00 PM Diario)
-    // =======================================================
-    cron.schedule('0 12 * * *', async () => {
-        console.log("Iniciando redacción autónoma para la página web...");
-        
-        try {
-            // Genera la nota y la guarda en MongoDB (CORREGIDO EL DOBLE AWAIT)
-            await compilarNoticiaExtendida(model, NoticiaDB);
-            console.log("Actualización web completada. Base de datos sincronizada.");
-            
-            // --- NUEVO: Aviso en Discord de la actualización Web ---
-            const ID_CANAL_NOTICIAS = '782813647629582366';
-            const canalNoticias = client.channels.cache.get(ID_CANAL_NOTICIAS);
-            
-            if (canalNoticias) {
-                await canalNoticias.send("🌐 **¡Atención Comunidad de Marina Gaming!** Acabo de publicar un nuevo artículo para Marina Gaming Noticias!. ¡Vayan a leerlo a la sección de *Noticias Gaming* en la página web oficial!: https://manuelheraz.github.io/MarinaGaming/pages/notigaming/index.html");
-            }
-            // --------------------------------------------------------
-            
-        } catch (error) {
-            console.error("Fallo en la publicación web automática:", error);
-        }
-    }, {
-        timezone: "America/Mexico_City"
-    });
-
-    // =======================================================
-    // MÓDULO G: ALERTA EPIC GAMES (JUEVES A LAS 10:05 AM)
-    // =======================================================
-    cron.schedule('5 10 * * 4', async () => {
-        console.log("Iniciando escaneo automático de Epic Games...");
-        
-        const ID_CANAL_EPIC = '892245997365887066'; // Canal asignado por el Alto Mando
-        const canalEpic = client.channels.cache.get(ID_CANAL_EPIC);
-        
-        if (!canalEpic) return console.error("Error Táctico: No se encontró el canal de Epic Games.");
-
-        try {
-            let reporteEpic = await obtenerJuegoGratisEpic();
-            
-            // Seguro contra el límite de 2000 caracteres
-            if (reporteEpic && reporteEpic.length > 2000) {
-                reporteEpic = reporteEpic.substring(0, 1995) + "...";
-            }
-            
-            // Enviamos el mensaje solo si realmente encontró juegos
-            if (reporteEpic && !reporteEpic.includes("Los radares no detectan")) {
-                await canalEpic.send(reporteEpic + "\n@everyone"); // Etiquetamos para máxima visibilidad
-            }
-        } catch (error) {
-            console.error("Fallo al emitir el reporte automático de Epic:", error);
-        }
-    }, {
-        timezone: "America/Mexico_City"
-    });
-
-    // =======================================================
-    // MÓDULO H: RADAR AUTOMÁTICO DE PARCHES (2:00 PM DIARIO)
-    // =======================================================
-    cron.schedule('0 14 * * *', async () => {
-        console.log("Iniciando escaneo diario de parches de videojuegos...");
-        
-        // --- 1. LISTA TÁCTICA DE CANALES PARA GTA V ---
-        const canalesGTA = [
-            '867860009169059911', 
-            '867857989360418856',
-            '1129112695136845985',
-            '867859003950628915'
-        ];
-
-        try {
-            // Extraemos el último parche de GTA V
-            let reporteGTA = await obtenerUltimoParche('gta5', model);
-            
-            // Verificamos que sea un parche real y no un mensaje de error o vacío
-            if (reporteGTA && !reporteGTA.includes("No detecto transmisiones") && !reporteGTA.includes("Interferencia")) {
-                
-                let mensajeFinal = "🚨 **¡NUEVO INFORME SOBRE GTA V!** 🚨\n\n" + reporteGTA;
-                
-                // --- 2. SEGURO ANTI-LÍMITE (Corte de emergencia) ---
-                if (mensajeFinal.length > 2000) {
-                    mensajeFinal = mensajeFinal.substring(0, 1995) + "...";
-                }
-                
-                // --- 3. BOMBARDEO MULTI-CANAL ---
-                for (const idCanal of canalesGTA) {
-                    const canalDestino = client.channels.cache.get(idCanal);
-                    if (canalDestino) {
-                        await canalDestino.send(mensajeFinal);
-                    } else {
-                        console.warn(`Aviso Táctico: No pude encontrar el canal con ID ${idCanal}`);
-                    }
-                }
-            }
-            
-        } catch (error) {
-            console.error("Fallo al emitir parches automáticos:", error);
-        }
-    }, {
-        timezone: "America/Mexico_City"
-    });
-
-}); // <-- AQUÍ SE CIERRA FINALMENTE EL EVENTO READY
+    // Encendemos los radares automáticos
+    iniciarAutomatizacion(c, model, NoticiaDB);
+});
 
 // ==========================================
 // INICIO DE SESIÓN EN DISCORD
