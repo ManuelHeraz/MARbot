@@ -4,18 +4,25 @@ const path = require('path');
 
 function inicializarIA() {
     function leerArchivoSeguro(nombreArchivo) {
-        try {
-            // process.cwd() busca en la raíz del proyecto, sin importar dónde esté este script
-            const ruta = path.join(process.cwd(), nombreArchivo);
-            if (fs.existsSync(ruta)) {
-                console.log(`📂 Archivo ${nombreArchivo} cargado con éxito.`);
-                return fs.readFileSync(ruta, 'utf8');
-            } else {
-                console.warn(`⚠️ Aviso: No se encontró el archivo ${nombreArchivo} en la raíz del proyecto.`);
-            }
-        } catch (err) {
-            console.error(`Error al leer ${nombreArchivo}:`, err);
-        }
+                // Radar de búsqueda: 3 posibles ubicaciones
+                const rutasPosibles = [
+                    path.join(process.cwd(), nombreArchivo),            // Intento 1: La raíz del proyecto
+                    path.join(process.cwd(), 'src', nombreArchivo),     // Intento 2: Adentro de la carpeta src
+                    path.join(__dirname, nombreArchivo)                 // Intento 3: Adentro de src/config
+                ];
+
+                for (const ruta of rutasPosibles) {
+                    try {
+                        if (fs.existsSync(ruta)) {
+                            console.log(`📂 Archivo ${nombreArchivo} cargado exitosamente desde: ${ruta}`);
+                            return fs.readFileSync(ruta, 'utf8');
+                        }
+                    } catch (err) {
+                        // Si falla esta ruta, simplemente ignora y pasa al siguiente intento
+                    }
+                }
+                
+        console.warn(`⚠️ Aviso Táctico: Archivo ${nombreArchivo} no encontrado en ninguna ruta. Usando memoria por defecto.`);
         return "Información no disponible.";
     }
 

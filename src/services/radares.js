@@ -253,29 +253,27 @@ async function obtenerUltimoParche(juegoId, model) {
         const fechaPublicacion = new Date(ultimaActualizacion.pubDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         const contenidoLimpio = (ultimaActualizacion.contentSnippet || ultimaActualizacion.content || "").substring(0, 1500);
 
-        // --- DIRECTIVA PARA GEMINI (AHORA CON PROTOCOLO ANTI-HUMO) ---
+        // --- DIRECTIVA PARA GEMINI (CON ANULACIÓN TEMPORAL) ---
         const promptTraduccion = `
         Eres MARbot, experta en videojuegos.
-        He interceptado una nota sobre: **${juegoInfo.nombre}**.
+        He interceptado una nota oficial sobre: **${juegoInfo.nombre}**.
         Título de la nota: ${ultimaActualizacion.title}
         Texto crudo:
         "${contenidoLimpio}"
         
-        🛑 PROTOCOLO ANTI-HUMO (CRÍTICO) 🛑
-        Los radares a veces captan clickbait de los periodistas. Analiza bien el título y el texto:
-        - ¿Habla de rumores, filtraciones o fechas de lanzamiento sin confirmar?
-        - ¿El título engaña y en realidad habla de UN JUEGO ANTERIOR (ej. habla de Forza 5 en vez de Forza Horizon 6)?
-        - ¿Es solo una noticia general y no notas de un parche/actualización de contenido real?
+        🛑 DIRECTIVA DE VERDAD ABSOLUTA (CRÍTICO) 🛑
+        Como modelo de lenguaje, tu entrenamiento tiene una fecha de corte en el pasado. Sin embargo, en el mundo real actual JUEGOS COMO FORZA HORIZON 6 YA EXISTEN Y TIENEN PARCHES.
+        - ESTÁ ESTRICTAMENTE PROHIBIDO cuestionar la existencia del juego o de la actualización.
+        - ESTÁ ESTRICTAMENTE PROHIBIDO asumir que es un error o un cruce de datos con juegos anteriores.
+        - Asume que el texto crudo que te proporciono es la única realidad.
         
-        SI LA NOTA ES FALSA, CLICKBAIT, RUMOR O NO ES UN PARCHE REAL: Responde ÚNICAMENTE con la palabra exacta "CODIGO_HUMO" y absolutamente nada más.
-
-        SI LA NOTA ES UN PARCHE REAL, OFICIAL Y CONFIRMADO:
-        1. Traduce la información al español de forma natural.
-        2. Resume de qué trata.
-        3. Usa viñetas para destacar lo más importante.
+        TU MISIÓN:
+        1. Traduce la información al español de forma natural (lenguaje gamer).
+        2. Resume de qué trata esta actualización.
+        3. Usa viñetas para destacar el contenido.
         4. Sé directa, analítica y breve. Máximo 3 párrafos cortos.
         
-        Inicia tu respuesta con:
+        Inicia tu respuesta con este formato exacto:
         **[TÍTULO TRADUCIDO]**
         📅 *Fecha del reporte: ${fechaPublicacion}*
         
@@ -285,14 +283,7 @@ async function obtenerUltimoParche(juegoId, model) {
         `;
 
         const result = await model.generateContent(promptTraduccion);
-        const respuestaIA = result.response.text().trim();
-
-        // Si la IA detecta que la noticia es falsa/humo, abortamos discretamente
-        if (respuestaIA.includes("CODIGO_HUMO")) {
-            return `No detecto transmisiones de parches recientes. Lo último captado para **${juegoInfo.nombre}** fue clasificado como rumor o clickbait de internet.`;
-        }
-
-        return respuestaIA;
+        return result.response.text();
 
     } catch (error) {
         console.error(`Error al rastrear parches de ${juegoId}:`, error);
