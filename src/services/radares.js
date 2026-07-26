@@ -227,8 +227,15 @@ async function obtenerUltimoParche(juegoId, model) {
         'fortnite': { nombre: 'Fortnite', url: 'https://news.google.com/rss/search?q=Fortnite+patch+notes+update&hl=en-US&gl=US&ceid=US:en' },
         'gta5': { nombre: 'GTA V / Online', url: 'https://store.steampowered.com/feeds/news/app/271590/' },
         'apex': { nombre: 'Apex Legends', url: 'https://store.steampowered.com/feeds/news/app/1172470/' },
-        'forza': { nombre: 'Forza Horizon', url: 'https://store.steampowered.com/feeds/news/app/1551360/' },
-        'halo': { nombre: 'Halo Infinite', url: 'https://store.steampowered.com/feeds/news/app/1240440/' },
+        
+        // --- NUEVOS RADARES GLOBALES (GOOGLE NEWS) ---
+        'forza6': { nombre: 'Forza Horizon 6', url: 'https://news.google.com/rss/search?q=Forza+Horizon+6+update+patch+notes&hl=en-US&gl=US&ceid=US:en' },
+        'halo_global': { nombre: 'Franquicia Halo (Global)', url: 'https://news.google.com/rss/search?q=Halo+Master+Chief+Collection+OR+Infinite+OR+Combat+Evolved+patch+notes+update&hl=en-US&gl=US&ceid=US:en' },
+        
+        // --- RADARES INDIVIDUALES DE HALO (STEAM) ---
+        'halo_infinite': { nombre: 'Halo Infinite', url: 'https://store.steampowered.com/feeds/news/app/1240440/' },
+        'halo_mcc': { nombre: 'Halo: TMCC', url: 'https://store.steampowered.com/feeds/news/app/976730/' },
+        
         'overwatch': { nombre: 'Overwatch 2', url: 'https://store.steampowered.com/feeds/news/app/2356590/' },
         'r6': { nombre: 'Rainbow Six Siege', url: 'https://store.steampowered.com/feeds/news/app/359550/' },
         'rocket': { nombre: 'Rocket League', url: 'https://store.steampowered.com/feeds/news/app/252950/' },
