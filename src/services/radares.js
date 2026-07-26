@@ -253,14 +253,23 @@ async function obtenerUltimoParche(juegoId, model) {
         const fechaPublicacion = new Date(ultimaActualizacion.pubDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         const contenidoLimpio = (ultimaActualizacion.contentSnippet || ultimaActualizacion.content || "").substring(0, 1500);
 
+        // --- DIRECTIVA PARA GEMINI (AHORA CON PROTOCOLO ANTI-HUMO) ---
         const promptTraduccion = `
         Eres MARbot, experta en videojuegos.
-        He interceptado las últimas notas del parche para el juego: **${juegoInfo.nombre}**.
+        He interceptado una nota sobre: **${juegoInfo.nombre}**.
         Título de la nota: ${ultimaActualizacion.title}
         Texto crudo:
         "${contenidoLimpio}"
         
-        TU MISIÓN:
+        🛑 PROTOCOLO ANTI-HUMO (CRÍTICO) 🛑
+        Los radares a veces captan clickbait de los periodistas. Analiza bien el título y el texto:
+        - ¿Habla de rumores, filtraciones o fechas de lanzamiento sin confirmar?
+        - ¿El título engaña y en realidad habla de UN JUEGO ANTERIOR (ej. habla de Forza 5 en vez de Forza Horizon 6)?
+        - ¿Es solo una noticia general y no notas de un parche/actualización de contenido real?
+        
+        SI LA NOTA ES FALSA, CLICKBAIT, RUMOR O NO ES UN PARCHE REAL: Responde ÚNICAMENTE con la palabra exacta "CODIGO_HUMO" y absolutamente nada más.
+
+        SI LA NOTA ES UN PARCHE REAL, OFICIAL Y CONFIRMADO:
         1. Traduce la información al español de forma natural.
         2. Resume de qué trata.
         3. Usa viñetas para destacar lo más importante.
@@ -276,7 +285,14 @@ async function obtenerUltimoParche(juegoId, model) {
         `;
 
         const result = await model.generateContent(promptTraduccion);
-        return result.response.text();
+        const respuestaIA = result.response.text().trim();
+
+        // Si la IA detecta que la noticia es falsa/humo, abortamos discretamente
+        if (respuestaIA.includes("CODIGO_HUMO")) {
+            return `No detecto transmisiones de parches recientes. Lo último captado para **${juegoInfo.nombre}** fue clasificado como rumor o clickbait de internet.`;
+        }
+
+        return respuestaIA;
 
     } catch (error) {
         console.error(`Error al rastrear parches de ${juegoId}:`, error);
