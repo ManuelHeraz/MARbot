@@ -3,6 +3,7 @@ const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, Attachmen
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
+
 // --- IMPORTACIÓN DE NUESTROS SISTEMAS MODULARES ---
 const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 const { conectarBD, NoticiaDB } = require('./database/db');
@@ -12,11 +13,6 @@ const { iniciarAutomatizacion } = require('./tasks/automatizacion');
 // --- INICIO DE SISTEMAS EXTERNOS ---
 conectarBD();
 iniciarServidor(NoticiaDB);
-
-// ==========================================
-// 2. CARGA DE LORE, GLOSARIO Y CONFIGURACIÓN DE GEMINI...
-// (El resto de tu código continúa aquí abajo igual que siempre)
-const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 
 // ==========================================
 // 2. CARGA DE LORE, GLOSARIO Y CONFIGURACIÓN DE GEMINI
@@ -303,7 +299,6 @@ client.on("interactionCreate", async (interaction) => {
             const carpetaBanners = path.join(__dirname, 'banners');
             let opciones = [];
 
-            // Leemos qué imágenes hay en la carpeta
             if (fs.existsSync(carpetaBanners)) {
                 const archivos = fs.readdirSync(carpetaBanners);
                 opciones = archivos
@@ -311,19 +306,16 @@ client.on("interactionCreate", async (interaction) => {
                     .map(archivo => archivo.replace('.png', ''));
             }
 
-            // Filtramos la lista según lo que el usuario esté tecleando
             const filtradas = opciones.filter(opcion => opcion.startsWith(focusedValue));
 
-            // Le enviamos la lista a Discord (máximo 25 opciones)
             await interaction.respond(
                 filtradas.slice(0, 25).map(opcion => ({ name: opcion, value: opcion }))
             );
         }
-        return; // Detenemos la ejecución aquí para que no marque error con el resto
+        return; 
     }
 
     // --- 2. MANEJO DE COMANDOS SLASH NORMALES ---
-    // Si la interacción no es un comando slash, la ignoramos
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'que') {
@@ -356,14 +348,13 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.channel.send(textoAEnviar);
     }
 
-    // --- NUEVO COMANDO: /noticias (Ejecución Manual) ---
+    // --- COMANDO: /noticias (Ejecución Manual) ---
     if (interaction.commandName === 'noticias') {
         await interaction.deferReply(); 
         
         try {
             let reporte = await compilarReporteNoticias(model);
             
-            // Seguro contra el límite de 2000 caracteres
             if (reporte && reporte.length > 2000) {
                 reporte = reporte.substring(0, 1995) + "...";
             }
@@ -375,7 +366,7 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // --- NUEVO COMANDO: /noticia-extendida ---
+    // --- COMANDO: /noticia-extendida ---
     if (interaction.commandName === 'noticia-extendida') {
         await interaction.deferReply(); 
         
@@ -384,7 +375,6 @@ client.on("interactionCreate", async (interaction) => {
             if (reporte && reporte.length > 2000) {
                 reporte = reporte.substring(0, 1995) + "...";
             }
-            // MARbot te da el texto listo para copiar y pegar en Facebook, ¡y ya se guardó en la BD!
             await interaction.editReply(reporte);
         } catch (error) {
             console.error("Error al generar nota extendida:", error);
@@ -392,14 +382,13 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-// --- COMANDO: /gratis ---
+    // --- COMANDO: /gratis ---
     if (interaction.commandName === 'gratis') {
         await interaction.deferReply(); 
         
         try {
             let reporteEpic = await obtenerJuegoGratisEpic();
             
-            // SEGURO ANTI-LÍMITE DE DISCORD
             if (reporteEpic && reporteEpic.length > 2000) {
                 reporteEpic = reporteEpic.substring(0, 1995) + "...";
             }
@@ -411,24 +400,21 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // --- NUEVO COMANDO: /status (Fase B) ---
+    // --- COMANDO: /status (Fase B) ---
     if (interaction.commandName === 'status') {
         await interaction.deferReply(); 
         
         try {
-            // Extraemos la opción que el usuario eligió en el menú desplegable
             const plataformaElegida = interaction.options.getString('plataforma');
-            
             const reporteStatus = await obtenerStatusPlataforma(plataformaElegida);
             await interaction.editReply(reporteStatus);
-            
         } catch (error) {
             console.error("Error al ejecutar /status:", error);
             await interaction.editReply("⚡ Falla en la consola de comandos. No pude verificar el estado de los servidores.");
         }
     }
 
-    // --- NUEVO COMANDO: /actualizaciones (Fase C) ---
+    // --- COMANDO: /actualizaciones (Fase C) ---
     if (interaction.commandName === 'actualizaciones') {
         await interaction.deferReply(); 
         
@@ -436,7 +422,6 @@ client.on("interactionCreate", async (interaction) => {
             const juegoElegido = interaction.options.getString('juego');
             const reporteParche = await obtenerUltimoParche(juegoElegido, model);
             
-            // Seguro de Discord (Límite de 2000 caracteres)
             let mensajeFinal = reporteParche;
             if (mensajeFinal && mensajeFinal.length > 2000) {
                 mensajeFinal = mensajeFinal.substring(0, 1995) + "...";
@@ -449,7 +434,7 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // --- NUEVO COMANDO: /medallas ---
+    // --- COMANDO: /medallas ---
     if (interaction.commandName === 'medallas') {
         const marinoSeleccionado = interaction.options.getString('marino');
         const nombreBuscado = marinoSeleccionado ? marinoSeleccionado.toLowerCase() : interaction.user.username.toLowerCase();
@@ -458,22 +443,16 @@ client.on("interactionCreate", async (interaction) => {
         let bannerEncontrado = null;
         let disponibles = [];
 
-        // 1. Buscamos primero en el radar leyendo toda la carpeta
         if (fs.existsSync(carpetaBanners)) {
             const archivos = fs.readdirSync(carpetaBanners);
-            
-            // Filtramos la lista para el mensaje de error (quitando .png sin importar mayúsculas)
             disponibles = archivos
                 .filter(archivo => archivo.toLowerCase().endsWith('.png'))
                 .map(archivo => archivo.replace(/\.png$/i, ''));
 
-            // 2. Comparamos todo en minúsculas para encontrar el archivo real sin importar cómo se guardó
             bannerEncontrado = archivos.find(archivo => archivo.toLowerCase() === `${nombreBuscado}.png`);
         }
 
-        // Si la búsqueda arrojó un resultado real
         if (bannerEncontrado) {
-            // Usamos el nombre exacto que tiene el archivo en Linux
             const rutaExacta = path.join(carpetaBanners, bannerEncontrado);
             const bannerImagen = new AttachmentBuilder(rutaExacta);
             
@@ -481,12 +460,8 @@ client.on("interactionCreate", async (interaction) => {
                 ? `Extrayendo el historial táctico del marino **${nombreBuscado}**:` 
                 : `Aquí tienes tu historial táctico y condecoraciones, **${nombreBuscado}**:`;
 
-            await interaction.reply({ 
-                content: textoRespuesta, 
-                files: [bannerImagen] 
-            });
+            await interaction.reply({ content: textoRespuesta, files: [bannerImagen] });
         } else {
-            // Si el archivo definitivamente no existe
             let mensajeRespuesta = marinoSeleccionado
                 ? `Mis registros indican que el marino **${nombreBuscado}** aún no tiene medallas asignadas.`
                 : `Parece que tu historial táctico aún está en blanco, no tienes medallas asignadas en mis registros.`;
