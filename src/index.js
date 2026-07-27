@@ -233,7 +233,7 @@ client.on("interactionCreate", async (interaction) => {
                 title: tituloExtraido,
                 source: url,
                 solicitado_por: interaction.user.username
-                // fecha_solicitud se genera automáticamente por el schema
+                // fecha_solicitud se genera automáticamente porel schema
             });
 
             await nuevaPista.save();

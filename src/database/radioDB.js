@@ -18,5 +18,5 @@ const colaSchema = new mongoose.Schema({
 }, { collection: 'cola_reproduccion', versionKey: false });
 
 const ColaReproduccion = radioConnection.model('ColaReproduccion', colaSchema);
-
+// corregido el nombre del archivo
 module.exports = { ColaReproduccion };
