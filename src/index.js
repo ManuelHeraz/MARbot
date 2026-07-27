@@ -11,6 +11,16 @@ const { iniciarAutomatizacion } = require('./tasks/automatizacion');
 const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
 const play = require('play-dl');
 const { ColaReproduccion } = require('./database/radioDb');
+// --- FUNCIÓN TÁCTICA: Convierte el formato de tiempo de YouTube (PT8M30S) a segundos ---
+function convertirDuracionYT(isoDuration) {
+    const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+    const matches = isoDuration.match(regex);
+    if (!matches) return 0;
+    const horas = matches[1] ? parseInt(matches[1], 10) : 0;
+    const minutos = matches[2] ? parseInt(matches[2], 10) : 0;
+    const segundos = matches[3] ? parseInt(matches[3], 10) : 0;
+    return (horas * 3600) + (minutos * 60) + segundos;
+}
 // --- INICIO DE SISTEMAS EXTERNOS ---
 conectarBD();
 iniciarServidor(NoticiaDB);
@@ -204,28 +214,55 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-    // --- NUEVO COMANDO: /play (Módulo de Radio - Blindado Total) ---
+    // --- NUEVO COMANDO: /play (Módulo de Radio - Escudo de 8 Minutos y Títulos Reales) ---
     if (interaction.commandName === 'play') {
         await interaction.deferReply(); 
         
         const url = interaction.options.getString('url');
+        const LIMITE_SEGUNDOS = 480; // 8 minutos en segundos
 
         try {
             let tituloExtraido = "";
+            let duracionSegundos = 0;
 
-            // 1. Detección de plataforma blindada contra bloqueos y autorizaciones
+            // 1. RUTA YOUTUBE (Vía API Oficial)
             if (url.includes('youtube.com') || url.includes('youtu.be')) {
-                tituloExtraido = "Petición de YouTube (Marina Radio)";
+                // Extraemos el ID del video de la URL
+                const regexID = /(?:youtu\.be\/|youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=))([^"&?\/\s]{11})/;
+                const match = url.match(regexID);
+                if (!match) return await interaction.editReply("⚠️ **Petición rechazada:** El enlace de YouTube no parece válido.");
+                const videoId = match[1];
+
+                // Llamada a la API de Google (Inmune a bloqueos 429)
+                const ytApiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=contentDetails,snippet&key=${process.env.YOUTUBE_API_KEY}`;
+                const respuesta = await fetch(ytApiUrl); // Fetch es nativo en Node 24
+                const datos = await respuesta.json();
+
+                if (!datos.items || datos.items.length === 0) {
+                    return await interaction.editReply("⚠️ **Petición rechazada:** El video no existe o es privado.");
+                }
+
+                tituloExtraido = datos.items[0].snippet.title;
+                duracionSegundos = convertirDuracionYT(datos.items[0].contentDetails.duration);
             } 
+            // 2. RUTA SOUNDCLOUD (Vía play-dl)
             else if (url.includes('soundcloud.com')) {
-                // Blindaje contra la falta de Client ID en SoundCloud
-                tituloExtraido = "Petición de SoundCloud (Marina Radio)";
+                const infoPista = await play.soundcloud(url);
+                tituloExtraido = infoPista.name || "Petición de SoundCloud";
+                duracionSegundos = infoPista.durationInSec || 0;
             } 
+            // 3. RUTA INVÁLIDA
             else {
                 return await interaction.editReply("⚠️ **Petición rechazada:** El radar solo admite enlaces directos de YouTube o SoundCloud.");
             }
 
-            // 2. Inserción directa en la Base de Datos de la Radio
+            // --- FILTRO DE SEGURIDAD (EL PARCHE) ---
+            if (duracionSegundos > LIMITE_SEGUNDOS) {
+                const minutosDetectados = Math.floor(duracionSegundos / 60);
+                return await interaction.editReply(`⛔ **Petición denegada:** La pista dura ${minutosDetectados} minutos. Por seguridad, el límite máximo permitido en la radio es de 8 minutos.`);
+            }
+
+            // Inserción en la Base de Datos de la Radio
             const nuevaPista = new ColaReproduccion({
                 title: tituloExtraido,
                 source: url,
@@ -234,23 +271,14 @@ client.on("interactionCreate", async (interaction) => {
 
             await nuevaPista.save();
 
-            // 3. Feedback inmediato en Discord
-            await interaction.editReply(`📻 **¡Señal recibida y encolada!**\n🎶 Pista añadida a Marina Gaming Radio por **${interaction.user.username}**.`);
+            await interaction.editReply(`📻 **¡Señal recibida y aprobada!**\n🎶 **${tituloExtraido}** se ha añadido a la cola de Marina Gaming Radio.`);
 
         } catch (error) {
             console.error("Fallo al procesar la petición de radio:", error);
-            await interaction.editReply("⚡ Interferencia grave en la frecuencia. No pude registrar la pista en la base de datos.");
+            await interaction.editReply("⚡ Interferencia grave. No pude registrar la pista en la base de datos.");
         }
     }
-
-    if (interaction.commandName === 'status') {
-        await interaction.deferReply(); 
-        try {
-            const reporteStatus = await obtenerStatusPlataforma(interaction.options.getString('plataforma'));
-            await interaction.editReply(reporteStatus);
-        } catch (error) { await interaction.editReply("⚡ Falla al verificar estado de servidores."); }
-    }
-
+    
     if (interaction.commandName === 'actualizaciones') {
         await interaction.deferReply(); 
         try {
