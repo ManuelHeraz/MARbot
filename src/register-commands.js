@@ -81,6 +81,18 @@ const commands = [
         description: "envia un embed!",
     },
     {
+    name: 'play',
+    description: 'Solicita una canción a la Marina Gaming Radio.',
+    options: [
+        {
+            name: 'url',
+            description: 'Enlace válido de YouTube o SoundCloud.',
+            type: 3, // Tipo STRING
+            required: true
+        }
+    ]
+    },
+    {
         name: "add",
         description: "añade dos numeros",
         options: [

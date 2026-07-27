@@ -9,7 +9,8 @@ const { iniciarServidor } = require('./server');
 const { inicializarIA } = require('./config/ia');
 const { iniciarAutomatizacion } = require('./tasks/automatizacion');
 const { compilarReporteNoticias, compilarNoticiaExtendida, obtenerJuegoGratisEpic, obtenerStatusPlataforma, obtenerUltimoParche } = require('./services/radares');
-
+const play = require('play-dl');
+const { ColaReproduccion } = require('./database/radioDb');
 // --- INICIO DE SISTEMAS EXTERNOS ---
 conectarBD();
 iniciarServidor(NoticiaDB);
@@ -201,6 +202,49 @@ client.on("interactionCreate", async (interaction) => {
             let reporteEpic = await obtenerJuegoGratisEpic();
             await interaction.editReply(reporteEpic.length > 2000 ? reporteEpic.substring(0, 1995) + "..." : reporteEpic);
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
+    }
+
+    // --- NUEVO COMANDO: /play (Módulo de Radio) ---
+    if (interaction.commandName === 'play') {
+        await interaction.deferReply(); 
+        
+        const url = interaction.options.getString('url');
+
+        try {
+            // 1. Verificación táctica de la URL
+            const tipoEnlace = await play.validate(url);
+            
+            if (tipoEnlace !== 'yt_video' && tipoEnlace !== 'so_track') {
+                return await interaction.editReply("⚠️ **Petición rechazada:** El radar solo admite enlaces directos de YouTube o SoundCloud.");
+            }
+
+            // 2. Extracción de Metadatos
+            let tituloExtraido = "";
+            if (tipoEnlace === 'yt_video') {
+                const infoVideo = await play.video_info(url);
+                tituloExtraido = infoVideo.video_details.title;
+            } else if (tipoEnlace === 'so_track') {
+                const infoPista = await play.soundcloud(url);
+                tituloExtraido = infoPista.name;
+            }
+
+            // 3. Inserción en la Base de Datos (Estructura Estricta)
+            const nuevaPista = new ColaReproduccion({
+                title: tituloExtraido,
+                source: url,
+                solicitado_por: interaction.user.username
+                // fecha_solicitud se genera automáticamente por el schema
+            });
+
+            await nuevaPista.save();
+
+            // 4. Feedback en Discord
+            await interaction.editReply(`📻 **¡Señal recibida y encolada!**\n🎶 Añadiste: **${tituloExtraido}** a Marina Gaming Radio.`);
+
+        } catch (error) {
+            console.error("Fallo al procesar la petición de radio:", error);
+            await interaction.editReply("⚡ Interferencia grave. No pude procesar el enlace o contactar con los servidores de la radio.");
+        }
     }
 
     if (interaction.commandName === 'status') {
