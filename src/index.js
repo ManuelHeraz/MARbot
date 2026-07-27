@@ -204,7 +204,7 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-    // --- NUEVO COMANDO: /play (Módulo de Radio - Blindado contra bloqueos 429) ---
+    // --- NUEVO COMANDO: /play (Módulo de Radio - Blindado Total) ---
     if (interaction.commandName === 'play') {
         await interaction.deferReply(); 
         
@@ -213,15 +213,13 @@ client.on("interactionCreate", async (interaction) => {
         try {
             let tituloExtraido = "";
 
-            // 1. Detección rápida de la plataforma mediante la URL
+            // 1. Detección de plataforma blindada contra bloqueos y autorizaciones
             if (url.includes('youtube.com') || url.includes('youtu.be')) {
-                // Blindaje contra el error 429 de YouTube: Asignamos un título estándar sin hacer peticiones bloqueadas
                 tituloExtraido = "Petición de YouTube (Marina Radio)";
             } 
             else if (url.includes('soundcloud.com')) {
-                // SoundCloud permite extraer metadatos sin baneo de IP
-                const infoPista = await play.soundcloud(url);
-                tituloExtraido = infoPista.name || "Petición de SoundCloud";
+                // Blindaje contra la falta de Client ID en SoundCloud
+                tituloExtraido = "Petición de SoundCloud (Marina Radio)";
             } 
             else {
                 return await interaction.editReply("⚠️ **Petición rechazada:** El radar solo admite enlaces directos de YouTube o SoundCloud.");
