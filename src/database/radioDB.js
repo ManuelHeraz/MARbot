@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-// Módulo de conexión paralela (Utiliza una variable de entorno exclusiva para la radio)
 const radioConnection = mongoose.createConnection(process.env.MONGODB_URI_RADIO);
 
 radioConnection.on('connected', () => {
@@ -11,7 +10,6 @@ radioConnection.on('error', (err) => {
     console.error('⚡ Error en la frecuencia de la radio:', err);
 });
 
-// Estructura estricta exigida por el AutoDJ
 const colaSchema = new mongoose.Schema({
     title: { type: String, required: true },
     source: { type: String, required: true },
