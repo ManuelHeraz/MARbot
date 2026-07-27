@@ -204,46 +204,44 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-    // --- NUEVO COMANDO: /play (Módulo de Radio) ---
+    // --- NUEVO COMANDO: /play (Módulo de Radio - Blindado contra bloqueos 429) ---
     if (interaction.commandName === 'play') {
         await interaction.deferReply(); 
         
         const url = interaction.options.getString('url');
 
         try {
-            // 1. Verificación táctica de la URL
-            const tipoEnlace = await play.validate(url);
-            
-            if (tipoEnlace !== 'yt_video' && tipoEnlace !== 'so_track') {
+            let tituloExtraido = "";
+
+            // 1. Detección rápida de la plataforma mediante la URL
+            if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                // Blindaje contra el error 429 de YouTube: Asignamos un título estándar sin hacer peticiones bloqueadas
+                tituloExtraido = "Petición de YouTube (Marina Radio)";
+            } 
+            else if (url.includes('soundcloud.com')) {
+                // SoundCloud permite extraer metadatos sin baneo de IP
+                const infoPista = await play.soundcloud(url);
+                tituloExtraido = infoPista.name || "Petición de SoundCloud";
+            } 
+            else {
                 return await interaction.editReply("⚠️ **Petición rechazada:** El radar solo admite enlaces directos de YouTube o SoundCloud.");
             }
 
-            // 2. Extracción de Metadatos
-            let tituloExtraido = "";
-            if (tipoEnlace === 'yt_video') {
-                const infoVideo = await play.video_info(url);
-                tituloExtraido = infoVideo.video_details.title;
-            } else if (tipoEnlace === 'so_track') {
-                const infoPista = await play.soundcloud(url);
-                tituloExtraido = infoPista.name;
-            }
-
-            // 3. Inserción en la Base de Datos (Estructura Estricta)
+            // 2. Inserción directa en la Base de Datos de la Radio
             const nuevaPista = new ColaReproduccion({
                 title: tituloExtraido,
                 source: url,
                 solicitado_por: interaction.user.username
-                // fecha_solicitud se genera automáticamente porel schema
             });
 
             await nuevaPista.save();
 
-            // 4. Feedback en Discord
-            await interaction.editReply(`📻 **¡Señal recibida y encolada!**\n🎶 Añadiste: **${tituloExtraido}** a Marina Gaming Radio.`);
+            // 3. Feedback inmediato en Discord
+            await interaction.editReply(`📻 **¡Señal recibida y encolada!**\n🎶 Pista añadida a Marina Gaming Radio por **${interaction.user.username}**.`);
 
         } catch (error) {
             console.error("Fallo al procesar la petición de radio:", error);
-            await interaction.editReply("⚡ Interferencia grave. No pude procesar el enlace o contactar con los servidores de la radio.");
+            await interaction.editReply("⚡ Interferencia grave en la frecuencia. No pude registrar la pista en la base de datos.");
         }
     }
 
