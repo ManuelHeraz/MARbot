@@ -6,8 +6,18 @@ const https = require('https');
 // FUNCIÓN 1: REPORTE RÁPIDO
 // ==========================================
 async function compilarReporteNoticias(model) {
-    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
-    let textoCrudo = "";
+const feeds = [
+        // Medios Periodísticos
+        "https://pcgamer.com/rss", 
+        "https://www.ign.com/rss/articles/feed", 
+        "https://polygon.com/rss/index.xml", 
+        "https://www.3djuegos.com/index.xml", 
+        "https://www.levelup.com/rss",
+        // Fuentes Corporativas Oficiales
+        "https://blog.playstation.com/feed/", 
+        "https://news.xbox.com/es-latam/feed/", 
+        "https://store.steampowered.com/feeds/news.xml"
+    ];    let textoCrudo = "";
     const hace12Horas = Date.now() - (12 * 60 * 60 * 1000);
 
     for (const feedUrl of feeds) {
@@ -48,8 +58,18 @@ async function compilarReporteNoticias(model) {
 // FUNCIÓN 2: NOTA EXTENDIDA WEB
 // ==========================================
 async function compilarNoticiaExtendida(model, NoticiaDB) {
-    const feeds = ["https://pcgamer.com/rss", "https://www.ign.com/rss/articles/feed", "https://polygon.com/rss/index.xml", "https://www.3djuegos.com/index.xml", "https://www.levelup.com/rss"];
-    let textoCrudo = "";
+    const feeds = [
+        // Medios Periodísticos
+        "https://pcgamer.com/rss", 
+        "https://www.ign.com/rss/articles/feed", 
+        "https://polygon.com/rss/index.xml", 
+        "https://www.3djuegos.com/index.xml", 
+        "https://www.levelup.com/rss",
+        // Fuentes Corporativas Oficiales
+        "https://blog.playstation.com/feed/", 
+        "https://news.xbox.com/es-latam/feed/", 
+        "https://store.steampowered.com/feeds/news.xml"
+    ];    let textoCrudo = "";
     const hace24Horas = Date.now() - (24 * 60 * 60 * 1000); 
 
     for (const feedUrl of feeds) {
