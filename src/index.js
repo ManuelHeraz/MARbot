@@ -21,6 +21,13 @@ function convertirDuracionYT(isoDuration) {
     const segundos = matches[3] ? parseInt(matches[3], 10) : 0;
     return (horas * 3600) + (minutos * 60) + segundos;
 }
+// --- FUNCIÓN TÁCTICA: Convierte segundos a formato MM:SS ---
+function formatoTiempo(segundos) {
+    if (!segundos || segundos === 0) return "Desconocido";
+    const min = Math.floor(segundos / 60);
+    const seg = segundos % 60;
+    return `${min}:${seg.toString().padStart(2, '0')}`;
+}
 // --- INICIO DE SISTEMAS EXTERNOS ---
 conectarBD();
 iniciarServidor(NoticiaDB);
@@ -214,12 +221,12 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-   // --- NUEVO COMANDO: /play (Sistema Híbrido: Enlaces + Búsqueda Interactiva) ---
+// --- NUEVO COMANDO: /play (Búsqueda Interactiva VIP + Tiempos + Cancelar) ---
     if (interaction.commandName === 'play') {
         await interaction.deferReply(); 
         
         const peticion = interaction.options.getString('peticion');
-        const LIMITE_SEGUNDOS = 480; // 8 minutos en segundos
+        const LIMITE_SEGUNDOS = 480; // 8 minutos
 
         try {
             // 1. EVALUAR SI ES UNA URL DIRECTA
@@ -249,7 +256,7 @@ client.on("interactionCreate", async (interaction) => {
                 }
 
                 if (duracionSegundos > LIMITE_SEGUNDOS) {
-                    return await interaction.editReply(`⛔ **Petición denegada:** La pista supera el límite de 8 minutos.`);
+                    return await interaction.editReply(`⛔ **Petición denegada:** La pista supera el límite de 8 minutos de la radio.`);
                 }
 
                 const nuevaPista = new ColaReproduccion({
@@ -261,32 +268,64 @@ client.on("interactionCreate", async (interaction) => {
                 return await interaction.editReply(`📻 **¡Señal recibida y aprobada!**\n🎶 **${tituloExtraido}** se ha añadido a Marina Gaming Radio.`);
             } 
             
-            // 2. MODO BÚSQUEDA (Si el usuario ingresó texto)
+            // 2. MODO BÚSQUEDA (El usuario ingresó texto)
             let opcionesBusqueda = [];
+            let datosOpciones = {}; // Memoria táctica para guardar datos sin romper los límites de Discord
 
-            // A) Buscar en YouTube (3 resultados) vía API
+            // A) Buscar en YouTube (3 resultados)
             const ytSearchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=3&q=${encodeURIComponent(peticion)}&key=${process.env.YOUTUBE_API_KEY}`;
             const ytRes = await fetch(ytSearchUrl);
             const ytData = await ytRes.json();
 
-            if (ytData.items) {
+            if (ytData.items && ytData.items.length > 0) {
+                // Truco maestro: Extraer las duraciones de los 3 videos en una sola petición
+                const videoIds = ytData.items.map(item => item.id.videoId).join(',');
+                const ytVideosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${process.env.YOUTUBE_API_KEY}`;
+                const ytVideosRes = await fetch(ytVideosUrl);
+                const ytVideosData = await ytVideosRes.json();
+
+                const duracionesMap = {};
+                if (ytVideosData.items) {
+                    ytVideosData.items.forEach(v => {
+                        duracionesMap[v.id] = convertirDuracionYT(v.contentDetails.duration);
+                    });
+                }
+
                 ytData.items.forEach(item => {
+                    const idMenu = `YT_${item.id.videoId}`;
+                    const duracionSeg = duracionesMap[item.id.videoId] || 0;
+                    
+                    datosOpciones[idMenu] = {
+                        titulo: item.snippet.title,
+                        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+                        duracion: duracionSeg
+                    };
+
                     opcionesBusqueda.push({
-                        label: item.snippet.title.substring(0, 90), // Discord limita a 100 caracteres
-                        description: '🔴 YouTube',
-                        value: `YT|https://www.youtube.com/watch?v=${item.id.videoId}|${item.snippet.title.substring(0, 90)}`
+                        label: item.snippet.title.substring(0, 95),
+                        description: `🔴 YouTube | ⏱️ Duración: ${formatoTiempo(duracionSeg)}`,
+                        value: idMenu
                     });
                 });
             }
 
-            // B) Buscar en SoundCloud (2 resultados) vía play-dl
+            // B) Buscar en SoundCloud (2 resultados)
             try {
                 const scSearch = await play.search(peticion, { source: { soundcloud: 'tracks' }, limit: 2 });
-                scSearch.forEach(track => {
+                scSearch.forEach((track, index) => {
+                    const idMenu = `SC_${index}`;
+                    const duracionSeg = track.durationInSec || 0;
+
+                    datosOpciones[idMenu] = {
+                        titulo: track.name,
+                        url: track.url,
+                        duracion: duracionSeg
+                    };
+
                     opcionesBusqueda.push({
-                        label: track.name.substring(0, 90),
-                        description: '🟠 SoundCloud',
-                        value: `SC|${track.url}|${track.name.substring(0, 90)}`
+                        label: track.name.substring(0, 95),
+                        description: `🟠 SoundCloud | ⏱️ Duración: ${formatoTiempo(duracionSeg)}`,
+                        value: idMenu
                     });
                 });
             } catch (err) {
@@ -297,48 +336,75 @@ client.on("interactionCreate", async (interaction) => {
                 return await interaction.editReply("⚠️ **Radares limpios:** No encontré resultados para esa búsqueda.");
             }
 
-            // C) Crear el Menú Interactivo
+            // --- C) OPCIÓN DE CANCELAR ---
+            opcionesBusqueda.push({
+                label: '❌ No está la canción que busco',
+                description: 'Abortar misión y cerrar el radar.',
+                value: 'CANCELAR_BUSQUEDA'
+            });
+
+            // D) Diseño visual del Embed
             const menu = new StringSelectMenuBuilder()
                 .setCustomId('seleccion_radio')
-                .setPlaceholder('Despliega para ver las opciones...')
+                .setPlaceholder('Despliega el escáner para ver las opciones...')
                 .addOptions(opcionesBusqueda);
 
             const fila = new ActionRowBuilder().addComponents(menu);
 
             const embed = new EmbedBuilder()
-                .setColor('#0099ff')
-                .setTitle('🔎 Radares de Búsqueda Activos')
-                .setDescription(`He interceptado varias señales para **"${peticion}"**.\nSelecciona la pista correcta en el menú inferior para encolarla:`);
+                .setColor('#00bfff') // Azul cian táctico
+                .setTitle('📡 Radares de Búsqueda Activos')
+                .setDescription(`He interceptado las siguientes frecuencias para **"${peticion}"**.\n\n👇 **Utiliza el menú desplegable abajo para evaluar la duración y encolar tu pista:**`)
+                .setFooter({ 
+                    text: `Solicitado por ${interaction.user.username} • Selecciona "No está la canción" para abortar`, 
+                    iconURL: interaction.user.displayAvatarURL() 
+                });
 
             const mensaje = await interaction.editReply({ embeds: [embed], components: [fila] });
 
-            // D) Escuchar la respuesta del usuario (Filtro de 60 segundos)
+            // E) Escuchar la respuesta (Filtro de 60 seg)
             const recolector = mensaje.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 60000 });
 
             recolector.on('collect', async i => {
-                // Evitar que otro marino robe la interacción
                 if (i.user.id !== interaction.user.id) {
-                    return i.reply({ content: '⛔ Acceso denegado. Solo quien solicitó la búsqueda puede seleccionar la pista.', ephemeral: true });
+                    return i.reply({ content: '⛔ Acceso denegado. Este radar pertenece a otro usuario.', ephemeral: true });
                 }
 
-                await i.deferUpdate(); // Confirmamos a Discord que recibimos el clic
+                await i.deferUpdate(); // Marcar clic como recibido
 
-                const datosSeleccion = i.values[0].split('|');
-                const plataforma = datosSeleccion[0];
-                const urlFinal = datosSeleccion[1];
-                const tituloFinal = datosSeleccion[2];
+                const seleccion = i.values[0];
 
-                // Inserción directa a MongoDB (omitimos filtro de tiempo aquí para evitar lentitud y doble llamada a API, asumimos que eligieron bien)
+                // Lógica del botón de Cancelar
+                if (seleccion === 'CANCELAR_BUSQUEDA') {
+                    return interaction.editReply({ 
+                        content: '❌ **Búsqueda cancelada.**\nPuedes intentar buscar de nuevo usando el comando `/play` e ingresando palabras clave más específicas (ej. "Nombre de la pista + Autor").', 
+                        embeds: [], 
+                        components: [] 
+                    });
+                }
+
+                const datosFinales = datosOpciones[seleccion];
+
+                // Escudo de 8 minutos integrado en la interfaz
+                if (datosFinales.duracion > LIMITE_SEGUNDOS) {
+                    return interaction.editReply({ 
+                        content: `⛔ **Petición denegada:** La pista seleccionada dura más de 8 minutos. Por seguridad, la transmisión no lo permite.`, 
+                        embeds: [], 
+                        components: [] 
+                    });
+                }
+
+                // Inserción en Base de Datos
                 try {
                     const pistaElegida = new ColaReproduccion({
-                        title: tituloFinal,
-                        source: urlFinal,
+                        title: datosFinales.titulo,
+                        source: datosFinales.url,
                         solicitado_por: interaction.user.username
                     });
                     await pistaElegida.save();
 
                     await interaction.editReply({ 
-                        content: `📻 **¡Señal encolada con éxito!**\n🎶 **${tituloFinal}** ha sido añadida a Marina Gaming Radio.`,
+                        content: `📻 **¡Solicitud añadida con éxito!**\n🎶 **${datosFinales.titulo}**\n\nSintoniza Marina Gaming Radio para escucharla.`,
                         embeds: [], 
                         components: [] 
                     });
@@ -349,7 +415,7 @@ client.on("interactionCreate", async (interaction) => {
 
             recolector.on('end', collected => {
                 if (collected.size === 0) {
-                    interaction.editReply({ content: '⏱️ **Tiempo agotado.** El radar de búsqueda se ha cerrado.', embeds: [], components: [] });
+                    interaction.editReply({ content: '⏱️ **Tiempo agotado.** El radar de búsqueda se ha cerrado por inactividad.', embeds: [], components: [] });
                 }
             });
 
