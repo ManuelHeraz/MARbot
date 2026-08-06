@@ -82,16 +82,16 @@ const commands = [
     },
     {
     name: 'play',
-    description: 'Solicita una canción a la Marina Gaming Radio.',
+    description: 'Añade una canción a Marina Gaming Radio.',
     options: [
         {
-            name: 'url',
-            description: 'Enlace válido de YouTube o SoundCloud.',
+            name: 'peticion', // Cambiamos el nombre de 'url' a 'peticion'
+            description: 'Enlace válido o NOMBRE de la canción.',
             type: 3, // Tipo STRING
             required: true
         }
     ]
-    },
+},
     {
         name: "add",
         description: "añade dos numeros",

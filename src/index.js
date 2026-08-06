@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
+const { ActionRowBuilder, StringSelectMenuBuilder, ComponentType, Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
 const fs = require('fs');
 const path = require('path');
 
@@ -214,68 +214,148 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) { await interaction.editReply("⚡ Error al desplegar el radar de Epic."); }
     }
 
-    // --- NUEVO COMANDO: /play (Módulo de Radio - Escudo de 8 Minutos y Títulos Reales) ---
+   // --- NUEVO COMANDO: /play (Sistema Híbrido: Enlaces + Búsqueda Interactiva) ---
     if (interaction.commandName === 'play') {
         await interaction.deferReply(); 
         
-        const url = interaction.options.getString('url');
+        const peticion = interaction.options.getString('peticion');
         const LIMITE_SEGUNDOS = 480; // 8 minutos en segundos
 
         try {
-            let tituloExtraido = "";
-            let duracionSegundos = 0;
+            // 1. EVALUAR SI ES UNA URL DIRECTA
+            if (peticion.startsWith('http://') || peticion.startsWith('https://')) {
+                let tituloExtraido = "";
+                let duracionSegundos = 0;
 
-            // 1. RUTA YOUTUBE (Vía API Oficial)
-            if (url.includes('youtube.com') || url.includes('youtu.be')) {
-                // Extraemos el ID del video de la URL
-                const regexID = /(?:youtu\.be\/|youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=))([^"&?\/\s]{11})/;
-                const match = url.match(regexID);
-                if (!match) return await interaction.editReply("⚠️ **Petición rechazada:** El enlace de YouTube no parece válido.");
-                const videoId = match[1];
+                if (peticion.includes('youtube.com') || peticion.includes('youtu.be')) {
+                    const regexID = /(?:youtu\.be\/|youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=))([^"&?\/\s]{11})/;
+                    const match = peticion.match(regexID);
+                    if (!match) return await interaction.editReply("⚠️ **Petición rechazada:** El enlace de YouTube no parece válido.");
+                    const videoId = match[1];
 
-                // Llamada a la API de Google (Inmune a bloqueos 429)
-                const ytApiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=contentDetails,snippet&key=${process.env.YOUTUBE_API_KEY}`;
-                const respuesta = await fetch(ytApiUrl); // Fetch es nativo en Node 24
-                const datos = await respuesta.json();
+                    const ytApiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=contentDetails,snippet&key=${process.env.YOUTUBE_API_KEY}`;
+                    const respuesta = await fetch(ytApiUrl);
+                    const datos = await respuesta.json();
 
-                if (!datos.items || datos.items.length === 0) {
-                    return await interaction.editReply("⚠️ **Petición rechazada:** El video no existe o es privado.");
+                    if (!datos.items || datos.items.length === 0) return await interaction.editReply("⚠️ **Petición rechazada:** El video no existe o es privado.");
+                    tituloExtraido = datos.items[0].snippet.title;
+                    duracionSegundos = convertirDuracionYT(datos.items[0].contentDetails.duration);
+                } else if (peticion.includes('soundcloud.com')) {
+                    const infoPista = await play.soundcloud(peticion);
+                    tituloExtraido = infoPista.name || "Petición de SoundCloud";
+                    duracionSegundos = infoPista.durationInSec || 0;
+                } else {
+                    return await interaction.editReply("⚠️ **Petición rechazada:** Solo admito enlaces directos de YouTube o SoundCloud.");
                 }
 
-                tituloExtraido = datos.items[0].snippet.title;
-                duracionSegundos = convertirDuracionYT(datos.items[0].contentDetails.duration);
+                if (duracionSegundos > LIMITE_SEGUNDOS) {
+                    return await interaction.editReply(`⛔ **Petición denegada:** La pista supera el límite de 8 minutos.`);
+                }
+
+                const nuevaPista = new ColaReproduccion({
+                    title: tituloExtraido,
+                    source: peticion,
+                    solicitado_por: interaction.user.username
+                });
+                await nuevaPista.save();
+                return await interaction.editReply(`📻 **¡Señal recibida y aprobada!**\n🎶 **${tituloExtraido}** se ha añadido a Marina Gaming Radio.`);
             } 
-            // 2. RUTA SOUNDCLOUD (Vía play-dl)
-            else if (url.includes('soundcloud.com')) {
-                const infoPista = await play.soundcloud(url);
-                tituloExtraido = infoPista.name || "Petición de SoundCloud";
-                duracionSegundos = infoPista.durationInSec || 0;
-            } 
-            // 3. RUTA INVÁLIDA
-            else {
-                return await interaction.editReply("⚠️ **Petición rechazada:** El radar solo admite enlaces directos de YouTube o SoundCloud.");
+            
+            // 2. MODO BÚSQUEDA (Si el usuario ingresó texto)
+            let opcionesBusqueda = [];
+
+            // A) Buscar en YouTube (3 resultados) vía API
+            const ytSearchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=3&q=${encodeURIComponent(peticion)}&key=${process.env.YOUTUBE_API_KEY}`;
+            const ytRes = await fetch(ytSearchUrl);
+            const ytData = await ytRes.json();
+
+            if (ytData.items) {
+                ytData.items.forEach(item => {
+                    opcionesBusqueda.push({
+                        label: item.snippet.title.substring(0, 90), // Discord limita a 100 caracteres
+                        description: '🔴 YouTube',
+                        value: `YT|https://www.youtube.com/watch?v=${item.id.videoId}|${item.snippet.title.substring(0, 90)}`
+                    });
+                });
             }
 
-            // --- FILTRO DE SEGURIDAD (EL PARCHE) ---
-            if (duracionSegundos > LIMITE_SEGUNDOS) {
-                const minutosDetectados = Math.floor(duracionSegundos / 60);
-                return await interaction.editReply(`⛔ **Petición denegada:** La pista dura ${minutosDetectados} minutos. Por seguridad, el límite máximo permitido en la radio es de 8 minutos.`);
+            // B) Buscar en SoundCloud (2 resultados) vía play-dl
+            try {
+                const scSearch = await play.search(peticion, { source: { soundcloud: 'tracks' }, limit: 2 });
+                scSearch.forEach(track => {
+                    opcionesBusqueda.push({
+                        label: track.name.substring(0, 90),
+                        description: '🟠 SoundCloud',
+                        value: `SC|${track.url}|${track.name.substring(0, 90)}`
+                    });
+                });
+            } catch (err) {
+                console.error("Fallo leve en búsqueda SC:", err);
             }
 
-            // Inserción en la Base de Datos de la Radio
-            const nuevaPista = new ColaReproduccion({
-                title: tituloExtraido,
-                source: url,
-                solicitado_por: interaction.user.username
+            if (opcionesBusqueda.length === 0) {
+                return await interaction.editReply("⚠️ **Radares limpios:** No encontré resultados para esa búsqueda.");
+            }
+
+            // C) Crear el Menú Interactivo
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('seleccion_radio')
+                .setPlaceholder('Despliega para ver las opciones...')
+                .addOptions(opcionesBusqueda);
+
+            const fila = new ActionRowBuilder().addComponents(menu);
+
+            const embed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('🔎 Radares de Búsqueda Activos')
+                .setDescription(`He interceptado varias señales para **"${peticion}"**.\nSelecciona la pista correcta en el menú inferior para encolarla:`);
+
+            const mensaje = await interaction.editReply({ embeds: [embed], components: [fila] });
+
+            // D) Escuchar la respuesta del usuario (Filtro de 60 segundos)
+            const recolector = mensaje.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 60000 });
+
+            recolector.on('collect', async i => {
+                // Evitar que otro marino robe la interacción
+                if (i.user.id !== interaction.user.id) {
+                    return i.reply({ content: '⛔ Acceso denegado. Solo quien solicitó la búsqueda puede seleccionar la pista.', ephemeral: true });
+                }
+
+                await i.deferUpdate(); // Confirmamos a Discord que recibimos el clic
+
+                const datosSeleccion = i.values[0].split('|');
+                const plataforma = datosSeleccion[0];
+                const urlFinal = datosSeleccion[1];
+                const tituloFinal = datosSeleccion[2];
+
+                // Inserción directa a MongoDB (omitimos filtro de tiempo aquí para evitar lentitud y doble llamada a API, asumimos que eligieron bien)
+                try {
+                    const pistaElegida = new ColaReproduccion({
+                        title: tituloFinal,
+                        source: urlFinal,
+                        solicitado_por: interaction.user.username
+                    });
+                    await pistaElegida.save();
+
+                    await interaction.editReply({ 
+                        content: `📻 **¡Señal encolada con éxito!**\n🎶 **${tituloFinal}** ha sido añadida a Marina Gaming Radio.`,
+                        embeds: [], 
+                        components: [] 
+                    });
+                } catch (errorDb) {
+                    await interaction.editReply({ content: '⚡ Interferencia grave. Fallo al guardar en la base de datos.', embeds: [], components: [] });
+                }
             });
 
-            await nuevaPista.save();
-
-            await interaction.editReply(`📻 **¡Señal recibida y aprobada!**\n🎶 **${tituloExtraido}** se ha añadido a la cola de Marina Gaming Radio.`);
+            recolector.on('end', collected => {
+                if (collected.size === 0) {
+                    interaction.editReply({ content: '⏱️ **Tiempo agotado.** El radar de búsqueda se ha cerrado.', embeds: [], components: [] });
+                }
+            });
 
         } catch (error) {
-            console.error("Fallo al procesar la petición de radio:", error);
-            await interaction.editReply("⚡ Interferencia grave. No pude registrar la pista en la base de datos.");
+            console.error("Fallo general en comando play:", error);
+            await interaction.editReply("⚡ Falla catastrófica en los sistemas de comunicación. Intenta de nuevo.");
         }
     }
     
