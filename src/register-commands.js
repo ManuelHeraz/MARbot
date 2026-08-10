@@ -11,7 +11,7 @@ const commands = [
         description: "Muestra el banner de medallas de un integrnate (o el tuyo).",
         options: [
             {
-                name: "miembro",
+                name: "marino",
                 description: "Selecciona a un integrante de la lista (déjalo en blanco para ver el tuyo).",
                 type: ApplicationCommandOptionType.String,
                 required: false, // Es falso para que puedan mandarlo vacío y ver el propio
