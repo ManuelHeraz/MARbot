@@ -201,7 +201,9 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.deferReply(); 
         try {
             let reporte = await compilarReporteNoticias(model);
-            await interaction.editReply(reporte.length > 2000 ? reporte.substring(0, 1995) + "..." : reporte);
+            const etiquetaNoticias = "<@&881321830927962162>"; 
+            const textoFinal = `${etiquetaNoticias}\n${reporte}`;
+            await interaction.editReply(textoFinal.length > 2000 ? textoFinal.substring(0, 1995) + "..." : textoFinal);
         } catch (error) { await interaction.editReply("⚡ Interferencia en los servidores."); }
     }
 
@@ -209,7 +211,9 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.deferReply(); 
         try {
             let reporte = await compilarNoticiaExtendida(model, NoticiaDB);
-            await interaction.editReply(reporte.length > 2000 ? reporte.substring(0, 1995) + "..." : reporte);
+            const etiquetaNoticias = "<@&881321830927962162>"; 
+            const textoFinal = `${etiquetaNoticias}\n${reporte}`;
+            await interaction.editReply(textoFinal.length > 2000 ? textoFinal.substring(0, 1995) + "..." : textoFinal);
         } catch (error) { await interaction.editReply("⚡ Interferencia. No pude redactar el artículo."); }
     }
 

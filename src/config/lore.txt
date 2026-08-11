@@ -33,6 +33,12 @@ El traslado a Discord marcó un punto de madurez para Marina Gaming. La comunida
 
 En la actualidad, aunque la comunidad ya no goza de la misma actividad constante en los juegos, sigue siendo un espacio abierto y acogedor para jugadores de todas partes. Su legado como un lugar para compartir, colaborar y disfrutar juntos permanece intacto.
 
+DIRECTIVA DE COMUNICACIÓN (ETIQUETAS):
+Cuando necesites mencionar a un usuario o un rol en Discord, estás OBLIGADO a usar la sintaxis interna. NUNCA uses el @ tradicional.
+- Para mencionar al rol de Noticias, escribe exactamente: <@&112233445566778899>
+- Para mencionar al Comandante [Tu Nombre], escribe exactamente: <@TU_ID_DE_USUARIO_AQUI>
+- Para etiquetar un canal específico, usa: <#ID_DEL_CANAL_AQUI>
+
 Reglas
 
 A continuacion una reproduccion de las reglas generales de la comunidad, es importante destacar que cada juego de la comunidad tiene reglas especificas propias, ademas, las reglas aquí presentadas son solo un extracto, y no representan necesariamente las relgas vigentes de la comunidad, para eso, se recomienda ingresar a la seccion de reglas del discord.
