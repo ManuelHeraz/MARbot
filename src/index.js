@@ -123,11 +123,12 @@ client.on("messageCreate", async (message) => {
     }
 
     // MÓDULO B: ASISTENTE GENERAL / CORTANA
+    // MÓDULO B: ASISTENTE GENERAL / CORTANA
     if (message.mentions.has(client.user)) {
         await message.channel.sendTyping();
         try {
             const promptActual = message.content.replace(`<@${client.user.id}>`, '').trim();
-            if (!promptActual) return message.reply("¿Me llamas y no me dejas ninguna directiva? Venga, dime qué ronda por tu cabeza.");
+            if (!promptActual) return message.reply("¿Me llamas y no me dices nada? dime qué ronda por tu cabeza.");
 
             let infoMenciones = "";
             if (message.mentions.users.size > 0) {
@@ -137,9 +138,11 @@ client.on("messageCreate", async (message) => {
                             const miembroServidor = await message.guild.members.fetch(userId);
                             const nombreReal = miembroServidor.nickname || usuario.username;
                             const nombresRoles = miembroServidor.roles.cache.filter(r => r.name !== '@everyone').map(r => r.name).join(', ');
-                            const esBot = usuario.bot ? "SÍ" : "NO";
-                            infoMenciones += `[${nombreReal} -> Bot?: ${esBot}, Roles: [${nombresRoles || 'Ninguno'}]]. `;
-                        } catch (e) { infoMenciones += `[${usuario.username} no se pudo recuperar roles]. `; }
+                            const esBot = usuario.bot ? "SÍ" : "NO";                            
+                            infoMenciones += `[Nombre: ${nombreReal}, Etiqueta: <@${userId}>, Bot?: ${esBot}, Roles: ${nombresRoles || 'Ninguno'}]. `;
+                        } catch (e) { 
+                            infoMenciones += `[Nombre: ${usuario.username}, Etiqueta: <@${userId}> (No se pudo recuperar roles)]. `; 
+                        }
                     }
                 }
             }
@@ -151,7 +154,7 @@ client.on("messageCreate", async (message) => {
                 historialTexto += msg.author.id === client.user.id ? `MARbot: ${msg.content}\n` : `${msg.author.username}: ${msg.content}\n`;
             });
 
-            const promptFinal = `${historialTexto}\n\n[DATOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\nMENSAJE ACTUAL DE ${message.author.username}: ${promptActual}\n\nResponde adoptando tu personalidad. Utiliza los roles. Termina con una pregunta o reto.`;
+            const promptFinal = `${historialTexto}\n\n[DATOS USUARIOS MENCIONADOS: ${infoMenciones}]\n\n[INFO SISTEMA: Te está hablando el usuario ${message.author.username}. Si necesitas etiquetarlo, usa estrictamente su etiqueta: <@${message.author.id}>]\n\nMENSAJE ACTUAL: ${promptActual}\n\nResponde adoptando tu personalidad. IMPORTANTE: Cuando menciones a un usuario, estás OBLIGADO a usar su formato de Etiqueta exacta (<@ID>).`;
 
             const result = await model.generateContent(promptFinal);
             const response = result.response.text();
