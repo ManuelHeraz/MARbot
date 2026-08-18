@@ -474,4 +474,8 @@ client.once("clientReady", (c) => {
     iniciarAutomatizacion(c, model, NoticiaDB);
 });
 
-client.login(process.env.DISCORD_TOKEN);
+console.log("⏳ Iniciando secuencia de login con Discord...");
+
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => console.log("✅ Token aceptado por los servidores de Discord."))
+    .catch(err => console.error("❌ Fallo crítico de autenticación:", err));
