@@ -466,12 +466,20 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+// ==========================================
+// RASTREADOR DE RED PROFUNDO (Eliminar cuando funcione)
+// ==========================================
+client.on("debug", (info) => {
+    console.log(`[RADAR DISCORD]: ${info}`);
+});
+
 // ---------------------------------------------------------------------
-// ENCENDIDO DEL SISTEMA (CORRECCIÓN DE DISCORD.JS v14+)
+// ENCENDIDO DEL SISTEMA
 // ---------------------------------------------------------------------
-client.once("clientReady", (c) => {
+// CAMBIO CRÍTICO: El evento se llama "ready", no "clientReady"
+client.once("ready", (c) => {
     console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea sin errores.`);
-    iniciarAutomatizacion(c, model, NoticiaDB);
+    // iniciarAutomatizacion(c, model, NoticiaDB); // Descomenta esto si ya tienes esa función lista
 });
 
 console.log("⏳ Iniciando secuencia de login con Discord...");
