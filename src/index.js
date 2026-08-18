@@ -1,3 +1,8 @@
+// ==========================================
+// PARCHE DE RED PARA RENDER (Forzar IPv4)
+// ==========================================
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 require("dotenv").config();
 const { ActionRowBuilder, StringSelectMenuBuilder, ComponentType, Client, IntentsBitField, Partials, EmbedBuilder, MessageFlags, AttachmentBuilder } = require("discord.js");
 const fs = require('fs');
