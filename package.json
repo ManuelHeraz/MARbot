@@ -1,9 +1,12 @@
 {
-  "name": "discord-bot",
+  "name": "marbot",
   "version": "1.0.0",
+  "description": "Bot de Marina Gaming",
   "main": "src/index.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js"
   },
   "keywords": [],
@@ -20,6 +23,5 @@
     "openai": "^3.2.1",
     "play-dl": "^1.9.7",
     "rss-parser": "^3.13.0"
-  },
-  "description": ""
+  }
 }
