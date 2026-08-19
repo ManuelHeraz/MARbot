@@ -471,6 +471,18 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+
+// ==========================================
+// SONDA DE RED MANUAL (Prueba de Cloudflare)
+// ==========================================
+console.log("🔍 LANZANDO SONDA DE RED HACIA DISCORD...");
+fetch("https://discord.com/api/v10/gateway")
+    .then(async (res) => {
+        console.log(`📡 Respuesta de la barrera de Discord: STATUS ${res.status}`);
+        const texto = await res.text();
+        console.log(`📄 Detalles de la barrera: ${texto.substring(0, 100)}...`);
+    })
+    .catch(err => console.error(`❌ La sonda se destruyó en el camino:`, err.message));
 // ==========================================
 // RASTREADOR DE RED PROFUNDO (Eliminar cuando funcione)
 // ==========================================
