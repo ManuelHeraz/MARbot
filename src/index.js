@@ -477,7 +477,7 @@ client.on("interactionCreate", async (interaction) => {
 // CAMBIO CRÍTICO: El evento se llama "ready", no "clientReady"
 client.once("ready", (c) => {
     console.log(`🤖 Enlace neuronal establecido. ${c.user.tag} (Cortana-Protocol) en línea sin errores.`);
-    // iniciarAutomatizacion(c, model, NoticiaDB); // Descomenta esto si ya tienes esa función lista
+    iniciarAutomatizacion(c, model, NoticiaDB); // Descomenta esto si ya tienes esa función lista
 });
 
 console.log("⏳ Iniciando secuencia de login con Discord...");
