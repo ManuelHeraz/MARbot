@@ -1,9 +1,13 @@
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Lo declaramos una sola vez aquí arriba
 
 function iniciarServidor(NoticiaDB) {
     const app = express();
-    app.use(cors()); // Permite que GitHub Pages lea los datos sin ser bloqueado
+
+    // Inyectamos los permisos de aduana (CORS)
+    app.use(cors({
+        origin: '*' // Permite el acceso desde cualquier página (incluyendo tu GitHub Pages)
+    }));
 
     app.get('/', (req, res) => res.send('El sistema de comunicaciones de Marina Gaming está en línea.'));
 
